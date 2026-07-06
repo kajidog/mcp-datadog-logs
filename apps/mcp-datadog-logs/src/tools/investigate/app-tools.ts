@@ -5,11 +5,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
 import { getServerConfig, HARD_MAX_ROWS } from '../../config.js'
 import { getDatadogClient } from '../../datadog/client.js'
-import { runInvestigation } from '../../datadog/investigation.js'
 import { generateReport } from '../../report/generate.js'
 import { registerPrefixedAppTool } from '../registration.js'
 import { createErrorResponse, jsonResult } from '../utils.js'
-import { getSession, investigatorResourceUri, setSession } from './runtime.js'
+import { getSession, investigatorResourceUri } from './runtime.js'
+import { runAndStoreInvestigation, sessionResult } from './session-ops.js'
 
 const appOnlyMeta = {
   ui: {
@@ -37,7 +37,7 @@ export function registerInvestigateAppTools(server: McpServer): void {
         // so the UI can show a "session expired" message.
         return jsonResult({ notFound: true })
       }
-      return jsonResult(session.result)
+      return jsonResult(sessionResult(session))
     }
   )
 
@@ -77,39 +77,12 @@ export function registerInvestigateAppTools(server: McpServer): void {
       cursor?: string
     }): Promise<CallToolResult> => {
       try {
-        const client = getDatadogClient()
-        const existing = getSession(viewUUID)
-        const { result, rawById } = await runInvestigation(client, {
-          query,
-          from,
-          to,
-          groupBy,
-          limit,
-          cursor,
-          title: existing?.title,
+        // No findings arg: existing findings are preserved across UI re-runs.
+        const { session } = await runAndStoreInvestigation({
+          viewUUID,
+          params: { query, from, to, groupBy, limit, cursor },
         })
-
-        // Load-more: merge the new page into the existing session so exports
-        // include everything the user has loaded.
-        if (cursor && existing) {
-          const seen = new Set(existing.result.rows.map((r) => r.id))
-          result.rows = [...existing.result.rows, ...result.rows.filter((r) => !seen.has(r.id))]
-          for (const [id, raw] of existing.rawById) {
-            if (!rawById.has(id)) {
-              rawById.set(id, raw)
-            }
-          }
-        }
-
-        const now = Date.now()
-        setSession(viewUUID, {
-          result,
-          rawById,
-          title: existing?.title,
-          createdAt: existing?.createdAt ?? now,
-          updatedAt: now,
-        })
-        return jsonResult(result)
+        return jsonResult(sessionResult(session))
       } catch (error) {
         return createErrorResponse(error)
       }
@@ -160,7 +133,7 @@ export function registerInvestigateAppTools(server: McpServer): void {
         if (!session) {
           return jsonResult({ ok: false, error: 'Investigation session not found. Re-run the investigation first.' })
         }
-        const html = generateReport(session.result, session.rawById, {
+        const html = generateReport(sessionResult(session), session.rawById, {
           title: title ?? session.title,
           site: safeSite(),
         })

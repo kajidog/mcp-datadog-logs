@@ -1,8 +1,8 @@
+import type { TimelineBucket } from '@kajidog/investigation-shared'
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import type { TimelineBucket } from '@kajidog/investigation-shared'
-import { CircleAlert, ListFilter, Loader2, X } from 'lucide-react'
+import { CircleAlert, ListFilter, Loader2, NotebookPen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import { useDisplayMode } from '@/hooks/useDisplayMode'
 import { useInvestigation } from '@/hooks/useInvestigation'
 import { useMcpResizeNotifications } from '@/hooks/useMcpResizeNotifications'
 import { cn } from '@/lib/utils'
-import { FACET_META, facetKey, FacetSidebar } from './FacetSidebar'
+import { FACET_META, FacetSidebar, facetKey } from './FacetSidebar'
 import { LogTable } from './LogTable'
 import { QueryBar } from './QueryBar'
 import { TimelineChart } from './TimelineChart'
@@ -107,6 +107,7 @@ export function Investigator() {
     result?.nextCursor ?? '',
     error ?? '',
     exportPath ?? '',
+    result?.findings?.length ?? 0,
   ].join(':')
   useMcpResizeNotifications(isStandaloneDev ? null : connectedApp, resizeTrigger)
 
@@ -263,6 +264,18 @@ export function Investigator() {
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
           レポートを書き出しました: <code className="font-mono">{exportPath}</code>
         </div>
+      )}
+
+      {result.findings && (
+        <Card className="shrink-0 py-3">
+          <CardContent className="px-3">
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <NotebookPen className="size-3.5" aria-hidden />
+              AI の調査メモ
+            </div>
+            <p className="whitespace-pre-wrap text-sm">{result.findings}</p>
+          </CardContent>
+        </Card>
       )}
 
       <div className="text-xs text-muted-foreground">

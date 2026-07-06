@@ -10,6 +10,11 @@ needed).
 
 - 🔎 `datadog_search_logs` — quick log search for the model (compact text output)
 - 📊 `datadog_aggregate_logs` — counts by facet or timeseries for the model
+- 🕵️ `datadog_run_investigation` — headless investigation for the model:
+  - full result (log rows, timeline, facets) stored server-side under a `viewUUID`
+  - the model receives only a compact summary — iterate without bloating context
+  - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
+    plain-text `findings` shown in the UI and the HTML report
 - 🖥️ `datadog_investigate_logs` — opens the interactive investigation UI:
   - stacked timeline chart of log volume by status
   - facet sidebar (service / status / host / custom `groupBy`) — click to filter
@@ -85,7 +90,8 @@ Required Datadog permissions are documented in
 |---|---|---|
 | `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor |
 | `datadog_aggregate_logs` | model | Count by facet (`groupBy`) or timeseries (`interval`) |
-| `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI |
+| `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
+| `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |
 | `_get_view_state` / `_run_investigation` / `_get_log_detail` / `_export_report` | UI only | Internal bridge tools called by the app (hidden from the model) |
 
 ## Exported reports

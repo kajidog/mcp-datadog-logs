@@ -43,7 +43,8 @@ Datadog の権限ドキュメントでは、ログデータを読むには `logs
 |---|---|---|---|---|
 | `datadog_search_logs` | `v2.LogsApi.listLogs` | ログ検索 | `logs_read_data`, `logs_read_index_data` | model-facing tool |
 | `datadog_aggregate_logs` | `v2.LogsApi.aggregateLogs` | ログ集計 | `logs_read_data`, `logs_read_index_data` | facet 集計と timeseries 集計 |
-| `datadog_investigate_logs` | `v2.LogsApi.listLogs`, `v2.LogsApi.aggregateLogs` | 調査 UI 用の初回検索/集計 | `logs_read_data`, `logs_read_index_data` | model-facing tool。UI を開く |
+| `datadog_run_investigation` | `v2.LogsApi.listLogs`, `v2.LogsApi.aggregateLogs` | UI を開かない調査(結果はサーバー側セッションに保存) | `logs_read_data`, `logs_read_index_data` | model-facing tool。モデルには要約のみ返す |
+| `datadog_investigate_logs` | `v2.LogsApi.listLogs`, `v2.LogsApi.aggregateLogs` | 調査 UI 用の初回検索/集計 | `logs_read_data`, `logs_read_index_data` | model-facing tool。UI を開く。`viewUUID` 指定時は API 呼び出しなしで保存済みセッションを表示 |
 | `_get_view_state` | なし | 保存済み view state の取得 | なし | app-only tool。Datadog へ再問い合わせしない |
 | `_run_investigation` | `v2.LogsApi.listLogs`, `v2.LogsApi.aggregateLogs` | UI からの再検索/集計 | `logs_read_data`, `logs_read_index_data` | app-only tool |
 | `_get_log_detail` | なし | 保存済み raw log の取得 | なし | app-only tool。Datadog へ再問い合わせしない |

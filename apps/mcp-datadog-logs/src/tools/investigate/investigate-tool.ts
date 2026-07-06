@@ -1,12 +1,11 @@
-import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
-import { getDatadogClient } from '../../datadog/client.js'
-import { runInvestigation } from '../../datadog/investigation.js'
 import { registerPrefixedAppTool } from '../registration.js'
 import { createErrorResponse } from '../utils.js'
-import { investigatorResourceUri, setSession } from './runtime.js'
+import { getSession, investigatorResourceUri, setSession } from './runtime.js'
+import { runAndStoreInvestigation, sessionResult } from './session-ops.js'
+import { formatInvestigationSummary } from './summary.js'
 
 export function registerInvestigateTool(server: McpServer): void {
   registerPrefixedAppTool(
@@ -17,13 +16,26 @@ export function registerInvestigateTool(server: McpServer): void {
       description:
         'Open an interactive Datadog log investigation UI (timeline chart, facet breakdowns, log table). ' +
         'The user can adjust the query/time range in the UI and export a shareable HTML report. ' +
-        'Returns a viewUUID and a summary. For plain text results use datadog_search_logs.',
+        'Returns a viewUUID and a summary. Pass a viewUUID from datadog_run_investigation to display an ' +
+        'already-investigated session without re-fetching. For plain text results use datadog_search_logs.',
       inputSchema: {
         query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
         from: z.string().default('now-1h').describe('Start time: Datadog time math ("now-4h") or ISO 8601'),
         to: z.string().default('now').describe('End time'),
         groupBy: z.string().optional().describe('Extra facet to break down by, e.g. "@http.status_code"'),
         title: z.string().optional().describe('Human-readable title for this investigation / report'),
+        viewUUID: z
+          .uuid()
+          .optional()
+          .describe(
+            'Display an existing investigation session (from datadog_run_investigation) instead of running a new query. ' +
+              'Other query params are ignored when the session exists.'
+          ),
+        findings: z
+          .string()
+          .max(20_000)
+          .optional()
+          .describe('Plain-text findings/notes to show in the UI findings panel and HTML report'),
       },
       annotations: {
         readOnlyHint: true,
@@ -37,41 +49,68 @@ export function registerInvestigateTool(server: McpServer): void {
       to,
       groupBy,
       title,
+      viewUUID,
+      findings,
     }: {
       query: string
       from: string
       to: string
       groupBy?: string
       title?: string
+      viewUUID?: string
+      findings?: string
     }): Promise<CallToolResult> => {
       try {
-        const client = getDatadogClient()
-        const { result, rawById } = await runInvestigation(client, { query, from, to, groupBy, title })
-        const viewUUID = randomUUID()
-        const now = Date.now()
-        setSession(viewUUID, { result, rawById, title, createdAt: now, updatedAt: now })
+        // Display path: show an existing session without touching Datadog.
+        if (viewUUID) {
+          const session = getSession(viewUUID)
+          if (!session) {
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    `Investigation session ${viewUUID} was not found (expired or server restarted). ` +
+                    'Re-run datadog_run_investigation, or call datadog_investigate_logs without viewUUID.',
+                },
+              ],
+            }
+          }
+          if (findings !== undefined || title !== undefined) {
+            session.findings = findings ?? session.findings
+            session.title = title ?? session.title
+            session.updatedAt = Date.now()
+            setSession(viewUUID, session)
+          }
+          // "viewUUID: <uuid>" is the contract with the investigator UI. Hosts
+          // forward only content text (not structuredContent/_meta) to the app,
+          // so the UI parses this text and pulls state via _get_view_state.
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  `${formatInvestigationSummary(sessionResult(session), viewUUID, { sampleRows: 0 })}\n` +
+                  'Displaying the stored investigation session in the UI. ' +
+                  'The user can refine the query and export an HTML report from the UI.',
+              },
+            ],
+          }
+        }
 
-        const statusFacet = result.facets.find((f) => f.facet === 'status')
-        const count = (status: string) => statusFacet?.values.find((v) => v.value === status)?.count ?? 0
-        const serviceFacet = result.facets.find((f) => f.facet === 'service')
-        const topServices = (serviceFacet?.values ?? [])
-          .slice(0, 3)
-          .map((v) => `${v.value} (${v.count})`)
-          .join(', ')
-
-        // "viewUUID: <uuid>" is the contract with the investigator UI. Hosts
-        // forward only content text (not structuredContent/_meta) to the app,
-        // so the UI parses this text and pulls state via _get_view_state.
+        const stored = await runAndStoreInvestigation({
+          params: { query, from, to, groupBy, title },
+          findings,
+        })
         return {
           content: [
             {
               type: 'text',
               text:
-                `Datadog log investigation started. viewUUID: ${viewUUID}\n` +
-                `Query: ${result.params.query} | Range: ${from} → ${to} | ~${result.totalCount} logs ` +
-                `(${count('error')} error, ${count('warn')} warn)` +
-                (topServices ? `\nTop services: ${topServices}` : '') +
-                '\nThe user can refine the query and export an HTML report from the UI. ' +
+                `Datadog log investigation started.\n` +
+                `${formatInvestigationSummary(sessionResult(stored.session), stored.viewUUID, { sampleRows: 0 })}\n` +
+                'The user can refine the query and export an HTML report from the UI. ' +
                 'For model-side drill-down use datadog_search_logs / datadog_aggregate_logs.',
             },
           ],

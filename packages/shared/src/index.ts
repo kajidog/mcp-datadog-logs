@@ -68,6 +68,8 @@ export interface InvestigationResult {
   nextCursor?: string
   /** ISO 8601 — when this result was produced */
   fetchedAt: string
+  /** AI-authored findings/notes for this investigation (plain text, may contain line breaks) */
+  findings?: string
   /** Resolved absolute time range (epoch ms) for display */
   resolvedRange: { fromMs: number; toMs: number }
 }
