@@ -18,6 +18,22 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/datadog-pc-telemetry-sample:
+    dependencies:
+      '@datadog/datadog-api-client':
+        specifier: ^1.60.0
+        version: 1.60.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.2
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.16)(tsx@4.23.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/mcp-datadog-logs:
     dependencies:
       '@datadog/datadog-api-client':

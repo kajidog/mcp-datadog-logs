@@ -1,0 +1,25 @@
+{
+  "name": "@kajidog/datadog-pc-telemetry-sample",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Small Node.js sample that sends local PC metrics and a log event to Datadog",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --silent && node --env-file-if-exists=.env dist/index.js",
+    "dry-run": "tsup --silent && node --env-file-if-exists=.env dist/index.js --dry-run",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@datadog/datadog-api-client": "^1.60.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
