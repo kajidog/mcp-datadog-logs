@@ -3,12 +3,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const PRESETS = [
-  { value: 'now-15m', label: 'Past 15 min' },
-  { value: 'now-1h', label: 'Past 1 hour' },
-  { value: 'now-4h', label: 'Past 4 hours' },
-  { value: 'now-1d', label: 'Past 1 day' },
-  { value: 'now-2d', label: 'Past 2 days' },
-  { value: 'now-7d', label: 'Past 7 days' },
+  { value: 'now-15m', label: '過去15分' },
+  { value: 'now-1h', label: '過去1時間' },
+  { value: 'now-4h', label: '過去4時間' },
+  { value: 'now-1d', label: '過去1日' },
+  { value: 'now-2d', label: '過去2日' },
+  { value: 'now-7d', label: '過去7日' },
 ] as const
 
 const ABSOLUTE = 'absolute'
@@ -76,7 +76,7 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Select value={mode} onValueChange={handleModeChange}>
-        <SelectTrigger size="sm" className="w-40" aria-label="Time range">
+        <SelectTrigger size="sm" className="w-40" aria-label="時間範囲">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -85,8 +85,8 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
               {preset.label}
             </SelectItem>
           ))}
-          <SelectItem value={ABSOLUTE}>Date & time</SelectItem>
-          <SelectItem value={RAW}>Raw value…</SelectItem>
+          <SelectItem value={ABSOLUTE}>日時を指定</SelectItem>
+          <SelectItem value={RAW}>直接入力…</SelectItem>
         </SelectContent>
       </Select>
       {mode === ABSOLUTE && (
@@ -97,7 +97,7 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
             onChange={(e) => handleAbsoluteFromChange(e.target.value)}
             step={60}
             className="w-44 font-mono text-xs"
-            aria-label="From date and time"
+            aria-label="開始日時"
           />
           <span className="text-xs text-muted-foreground">→</span>
           <Input
@@ -106,7 +106,7 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
             onChange={(e) => handleAbsoluteToChange(e.target.value)}
             step={60}
             className="w-44 font-mono text-xs"
-            aria-label="To date and time"
+            aria-label="終了日時"
           />
         </>
       )}
@@ -115,17 +115,17 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
           <Input
             value={from}
             onChange={(e) => onChange(e.target.value, to)}
-            placeholder="now-4h or ISO"
+            placeholder="now-4h または ISO"
             className="w-36 font-mono text-xs"
-            aria-label="From"
+            aria-label="開始"
           />
           <span className="text-xs text-muted-foreground">→</span>
           <Input
             value={to}
             onChange={(e) => onChange(from, e.target.value)}
-            placeholder="now or ISO"
+            placeholder="now または ISO"
             className="w-32 font-mono text-xs"
-            aria-label="To"
+            aria-label="終了"
           />
         </>
       )}

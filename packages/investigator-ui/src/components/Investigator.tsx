@@ -1,9 +1,11 @@
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { CircleAlert, Loader2, X } from 'lucide-react'
+import type { TimelineBucket } from '@kajidog/investigation-shared'
+import { CircleAlert, ListFilter, Loader2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { createMockApp, MOCK_VIEW_UUID } from '@/hooks/devMockApp'
 import { exportReport, fetchLogDetail } from '@/hooks/toolClient'
 import { useDisplayMode } from '@/hooks/useDisplayMode'
@@ -31,6 +33,10 @@ export function Investigator() {
   const [exporting, setExporting] = useState(false)
   const [exportPath, setExportPath] = useState<string | null>(null)
 
+  // Client-side narrowing of already-fetched rows — no API call involved.
+  const [localKeyword, setLocalKeyword] = useState('')
+  const [selectedBucket, setSelectedBucket] = useState<string | null>(null)
+
   const { app: connectedApp } = useApp({
     appInfo: { name: 'Datadog Logs Investigator', version: '1.0.0' },
     capabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
@@ -48,7 +54,7 @@ export function Investigator() {
       }
       createdApp.ontoolcancelled = () => {
         setPhase('error')
-        setError('Tool call was cancelled. Ask the assistant to run the investigation again.')
+        setError('ツール呼び出しがキャンセルされました。アシスタントに調査の再実行を依頼してください。')
       }
       createdApp.onteardown = async () => ({})
       createdApp.onerror = (err: unknown) => {
@@ -57,6 +63,36 @@ export function Investigator() {
       }
     },
   })
+  // Rows narrowed client-side by the selected timeline bucket and local keyword.
+  // A bucket stays selected only while it exists in the current timeline, so a
+  // re-run with a different range implicitly clears it.
+  const effectiveBucket =
+    selectedBucket && result?.timeline.some((b) => b.time === selectedBucket) ? selectedBucket : null
+  const bucketRange =
+    result && effectiveBucket
+      ? resolveBucketRange(result.timeline, effectiveBucket, result.interval, result.resolvedRange.toMs)
+      : null
+  const keywordTerms = localKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const localFilterActive = Boolean(bucketRange) || keywordTerms.length > 0
+  const filteredRows = (result?.rows ?? []).filter((row) => {
+    if (bucketRange) {
+      const t = Date.parse(row.timestamp)
+      if (Number.isNaN(t) || t < bucketRange.startMs || t >= bucketRange.endMs) {
+        return false
+      }
+    }
+    if (keywordTerms.length > 0) {
+      const haystack = [row.message, row.service, row.host, row.status, ...(row.tags ?? [])]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      if (!keywordTerms.every((term) => haystack.includes(term))) {
+        return false
+      }
+    }
+    return true
+  })
+
   const displayMode = useDisplayMode(isStandaloneDev ? null : connectedApp)
   const fullscreen = displayMode.displayMode === 'fullscreen'
   const resizeTrigger = [
@@ -66,6 +102,8 @@ export function Investigator() {
     loadingMore ? 'loadingMore' : 'idle',
     result?.fetchedAt ?? '',
     result?.rows.length ?? 0,
+    filteredRows.length,
+    effectiveBucket ?? '',
     result?.nextCursor ?? '',
     error ?? '',
     exportPath ?? '',
@@ -128,7 +166,7 @@ export function Investigator() {
       if (exported.ok && exported.path) {
         setExportPath(exported.path)
       } else {
-        setError(exported.error ?? 'Export failed')
+        setError(exported.error ?? 'エクスポートに失敗しました')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -146,7 +184,7 @@ export function Investigator() {
     return (
       <CenteredNotice>
         <Loader2 className="size-4 animate-spin" />
-        {phase === 'loading' ? 'Loading investigation…' : 'Waiting for investigation data…'}
+        {phase === 'loading' ? '調査データを読み込み中…' : '調査データを待っています…'}
       </CenteredNotice>
     )
   }
@@ -155,7 +193,7 @@ export function Investigator() {
     return (
       <CenteredNotice>
         <CircleAlert className="size-4 text-status-warn" />
-        This investigation session has expired. Ask the assistant to run datadog_investigate_logs again.
+        この調査セッションは期限切れです。アシスタントに datadog_investigate_logs の再実行を依頼してください。
       </CenteredNotice>
     )
   }
@@ -164,7 +202,7 @@ export function Investigator() {
     return (
       <CenteredNotice>
         <CircleAlert className="size-4 text-status-error" />
-        <span className="whitespace-pre-wrap">{error ?? 'Something went wrong.'}</span>
+        <span className="whitespace-pre-wrap">{error ?? '問題が発生しました。'}</span>
       </CenteredNotice>
     )
   }
@@ -197,13 +235,13 @@ export function Investigator() {
 
       {activeFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-muted-foreground">Showing only:</span>
+          <span className="text-muted-foreground">絞り込み中:</span>
           {activeFilters.map((filter) => (
             <button
               key={`${filter.start}:${filter.token}`}
               type="button"
               onClick={() => handleRemoveFilter(filter)}
-              title="Remove this filter"
+              title="このフィルタを解除"
               className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1.5 hover:bg-accent"
             >
               <span className="text-muted-foreground">{FACET_META[filter.facet]?.label ?? filter.facet}:</span>
@@ -223,12 +261,12 @@ export function Investigator() {
 
       {exportPath && (
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
-          Report exported: <code className="font-mono">{exportPath}</code>
+          レポートを書き出しました: <code className="font-mono">{exportPath}</code>
         </div>
       )}
 
       <div className="text-xs text-muted-foreground">
-        ~{result.totalCount.toLocaleString('en-US')} logs matched · showing {result.rows.length}
+        約 {result.totalCount.toLocaleString('ja-JP')} 件が該当 · {result.rows.length} 件を取得済み
         {result.params.title ? ` · ${result.params.title}` : ''}
       </div>
 
@@ -251,16 +289,48 @@ export function Investigator() {
                 timeline={result.timeline}
                 interval={result.interval}
                 rangeMs={result.resolvedRange.toMs - result.resolvedRange.fromMs}
+                selectedBucket={effectiveBucket}
+                onBucketSelect={setSelectedBucket}
               />
             </CardContent>
           </Card>
           <Card className={cn('py-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-hidden')}>
             <CardContent className={cn('px-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-auto')}>
+              <div className="flex flex-wrap items-center gap-2 border-b px-2 pb-2 pt-1">
+                <ListFilter className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <Input
+                  value={localKeyword}
+                  onChange={(e) => setLocalKeyword(e.target.value)}
+                  placeholder="取得済みのログをキーワードで絞り込み（再検索なし）"
+                  aria-label="取得済みログのキーワード絞り込み"
+                  className="h-7 w-80 max-w-full text-xs"
+                />
+                {bucketRange && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBucket(null)}
+                    title="時間帯の絞り込みを解除"
+                    className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1.5 text-xs hover:bg-accent"
+                  >
+                    <span className="text-muted-foreground">時間帯:</span>
+                    <span className="font-medium">{formatBucketRange(bucketRange)}</span>
+                    <X className="size-3 text-muted-foreground" />
+                  </button>
+                )}
+                {localFilterActive && (
+                  <span className="text-[11px] text-muted-foreground">
+                    取得済み {result.rows.length} 件中 {filteredRows.length} 件を表示
+                  </span>
+                )}
+              </div>
               <LogTable
-                rows={result.rows}
+                rows={filteredRows}
                 hasMore={Boolean(result.nextCursor)}
                 loadingMore={loadingMore}
                 onLoadMore={() => void loadMore()}
+                emptyMessage={
+                  localFilterActive ? '絞り込み条件に一致するログは取得済みデータにありません。' : undefined
+                }
                 fetchDetail={async (logId) => {
                   const app = appRef.current
                   const viewUUID = viewUUIDRef.current
@@ -324,4 +394,46 @@ function unquoteValue(raw: string): string {
 
 function removeRange(query: string, start: number, end: number): string {
   return (query.slice(0, start) + query.slice(end)).replace(/\s+/g, ' ').trim()
+}
+
+interface BucketRange {
+  startMs: number
+  endMs: number
+}
+
+function intervalToMs(interval: string): number {
+  const match = /^(\d+)\s*(s|m|h|d)$/.exec(interval.trim())
+  if (!match) {
+    return 0
+  }
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd']
+  return Number(match[1]) * unitMs
+}
+
+function resolveBucketRange(
+  timeline: TimelineBucket[],
+  bucketTime: string,
+  interval: string,
+  rangeEndMs: number
+): BucketRange | null {
+  const startMs = Date.parse(bucketTime)
+  if (Number.isNaN(startMs)) {
+    return null
+  }
+  const intervalMs = intervalToMs(interval)
+  if (intervalMs > 0) {
+    return { startMs, endMs: startMs + intervalMs }
+  }
+  // Unknown interval format: fall back to the next bucket's start (or the range end).
+  const index = timeline.findIndex((b) => b.time === bucketTime)
+  const nextMs = index >= 0 && index + 1 < timeline.length ? Date.parse(timeline[index + 1].time) : NaN
+  return { startMs, endMs: Number.isNaN(nextMs) ? rangeEndMs : nextMs }
+}
+
+function formatBucketRange({ startMs, endMs }: BucketRange): string {
+  const start = new Date(startMs)
+  const end = new Date(endMs)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${start.getMonth() + 1}/${start.getDate()} ${hhmm(start)}〜${hhmm(end)}`
 }

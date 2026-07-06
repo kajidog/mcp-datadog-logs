@@ -19,9 +19,11 @@ interface LogTableProps {
   loadingMore: boolean
   onLoadMore: () => void
   fetchDetail: (logId: string) => Promise<unknown | null>
+  /** Message shown when rows is empty (e.g. differs when a local filter is active) */
+  emptyMessage?: string
 }
 
-export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }: LogTableProps) {
+export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, emptyMessage }: LogTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, unknown>>({})
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -46,7 +48,11 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }
   }
 
   if (rows.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No log entries in this range.</p>
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        {emptyMessage ?? 'この範囲にログはありません。'}
+      </p>
+    )
   }
 
   return (
@@ -55,10 +61,10 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }
         <TableHeader>
           <TableRow>
             <TableHead className="w-6" />
-            <TableHead className="w-40">Time</TableHead>
-            <TableHead className="w-16">Status</TableHead>
-            <TableHead className="w-32">Service</TableHead>
-            <TableHead>Message</TableHead>
+            <TableHead className="w-40">時刻</TableHead>
+            <TableHead className="w-16">ステータス</TableHead>
+            <TableHead className="w-32">サービス</TableHead>
+            <TableHead>メッセージ</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -85,7 +91,7 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }
                   {row.service ?? '-'}
                 </TableCell>
                 <TableCell className="max-w-0 truncate py-1.5 text-xs" title={row.message}>
-                  {row.message || '(no message)'}
+                  {row.message || '(メッセージなし)'}
                 </TableCell>
               </TableRow>
               {expandedId === row.id && (
@@ -93,7 +99,7 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }
                   <TableCell colSpan={5} className="bg-muted/40 p-0">
                     {loadingId === row.id ? (
                       <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" /> Loading detail…
+                        <Loader2 className="size-3.5 animate-spin" /> 詳細を読み込み中…
                       </div>
                     ) : (
                       <pre className="max-h-72 overflow-auto p-3 text-[11px] leading-relaxed">
@@ -111,7 +117,7 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail }
         <div className="flex justify-center py-2">
           <Button size="sm" variant="ghost" onClick={onLoadMore} disabled={loadingMore}>
             {loadingMore && <Loader2 className="animate-spin" />}
-            Load more
+            さらに読み込む
           </Button>
         </div>
       )}

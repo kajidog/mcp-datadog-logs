@@ -42,27 +42,27 @@ export function QueryBar({
             onRun()
           }
         }}
-        placeholder="Type words to search log messages, or click a value in the left panel to filter"
-        title="Datadog query syntax also works, e.g. service:payments status:error"
+        placeholder="メッセージ内の単語で検索、または左の一覧をクリックして絞り込み"
+        title="Datadog のクエリ構文も使えます（例: service:payments status:error）"
         className="min-w-48 flex-1 font-mono text-xs"
-        aria-label="Log search query"
+        aria-label="ログ検索クエリ"
       />
       <TimeRangePicker from={from} to={to} onChange={onRangeChange} />
       <Button size="sm" onClick={onRun} disabled={running}>
         {running ? <Loader2 className="animate-spin" /> : <Play />}
-        Run
+        検索
       </Button>
       <Button size="sm" variant="outline" onClick={onExport} disabled={exporting}>
         {exporting ? <Loader2 className="animate-spin" /> : <Download />}
-        Export
+        エクスポート
       </Button>
       {canFullscreen && (
         <Button
           size="sm"
           variant="outline"
           onClick={onToggleFullscreen}
-          aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          aria-label={fullscreen ? '全画面を終了' : '全画面表示'}
+          title={fullscreen ? '全画面を終了' : '全画面表示'}
         >
           {fullscreen ? <Minimize2 /> : <Maximize2 />}
         </Button>

@@ -1,6 +1,6 @@
 import type { TimelineBucket } from '@kajidog/investigation-shared'
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 
 /** Bottom-to-top stack order; statuses outside this set fold into "other". */
@@ -18,9 +18,12 @@ interface TimelineChartProps {
   timeline: TimelineBucket[]
   interval: string
   rangeMs: number
+  /** Bucket time (ISO) currently selected as a table filter, if any */
+  selectedBucket: string | null
+  onBucketSelect: (time: string | null) => void
 }
 
-export function TimelineChart({ timeline, interval, rangeMs }: TimelineChartProps) {
+export function TimelineChart({ timeline, interval, rangeMs, selectedBucket, onBucketSelect }: TimelineChartProps) {
   const { data, keys } = useMemo(() => {
     const present = new Set<string>()
     const rows = timeline.map((bucket) => {
@@ -42,14 +45,25 @@ export function TimelineChart({ timeline, interval, rangeMs }: TimelineChartProp
 
   if (timeline.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No logs in this range</div>
+      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+        この範囲にログはありません
+      </div>
     )
   }
 
   return (
     <div>
-      <ChartContainer config={chartConfig} className="h-40 w-full">
-        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+      <ChartContainer config={chartConfig} className="h-40 w-full [&_.recharts-bar-rectangle]:cursor-pointer">
+        <BarChart
+          data={data}
+          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+          onClick={(state) => {
+            const label = state?.activeLabel
+            if (typeof label === 'string') {
+              onBucketSelect(label === selectedBucket ? null : label)
+            }
+          }}
+        >
           <CartesianGrid vertical={false} />
           <XAxis
             dataKey="time"
@@ -68,18 +82,26 @@ export function TimelineChart({ timeline, interval, rangeMs }: TimelineChartProp
               stackId="status"
               fill={`var(--color-${key})`}
               radius={i === keys.length - 1 ? [2, 2, 0, 0] : 0}
-            />
+            >
+              {data.map((row) => (
+                <Cell
+                  key={String(row.time)}
+                  fillOpacity={selectedBucket && row.time !== selectedBucket ? 0.3 : 1}
+                />
+              ))}
+            </Bar>
           ))}
         </BarChart>
       </ChartContainer>
-      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {[...keys].reverse().map((key) => (
           <span key={key} className="inline-flex items-center gap-1.5">
             <span className="size-2.5 rounded-[3px]" style={{ background: `var(--status-${key})` }} />
             {key}
           </span>
         ))}
-        <span className="ml-auto">per {interval}</span>
+        <span className="text-[11px]">バーをクリックするとその時間帯だけ表に表示</span>
+        <span className="ml-auto">{interval} ごと</span>
       </div>
     </div>
   )
