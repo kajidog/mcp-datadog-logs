@@ -82,6 +82,7 @@ npx @modelcontextprotocol/inspector node apps/mcp-datadog-logs/dist/index.js
 |---|---|
 | 401 Unauthorized | `DD_API_KEY` が違う、`DD_SITE` が違う、`DD_APP_KEY` が同じ org/site の key ではない |
 | 403 Forbidden | Application Key の権限不足、作成ユーザーの権限不足、scoped key の scope 不足 |
+| 429 Too Many Requests | Datadog API の rate limit。時間範囲を狭める、連続 refresh を避ける、複数 MCP client から同時に叩かない、rate-limit window の reset を待つ |
 | 400 Bad Request | Datadog log query や time range の形式が不正 |
 
 ## 参考リンク

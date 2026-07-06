@@ -34,6 +34,12 @@ export class DatadogLogsClient {
         apiKeyAuth: config.apiKey,
         appKeyAuth: config.appKey,
       },
+      // The Datadog SDK retries 429/5xx responses and honors
+      // X-RateLimit-Reset when Datadog returns it.
+      enableRetry: true,
+      maxRetries: 3,
+      backoffBase: 2,
+      backoffMultiplier: 2,
     })
     configuration.setServerVariables({ site: config.site })
     this.api = new v2.LogsApi(configuration)
@@ -131,7 +137,10 @@ export function describeDatadogError(error: unknown): string {
     )
   }
   if (code === 429) {
-    return 'Datadog API rate limit exceeded (429). Wait a moment and retry with a narrower query.'
+    return (
+      'Datadog API rate limit exceeded (429). Wait for the Datadog rate-limit window to reset, ' +
+      'then retry with a narrower time range, fewer repeated refreshes, or fewer concurrent MCP clients.'
+    )
   }
   if (code === 400) {
     return `Datadog API rejected the request (400). Check the query syntax and time range. Details: ${message}`

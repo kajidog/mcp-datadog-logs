@@ -1,7 +1,7 @@
 import type { InvestigationParams, InvestigationResult } from '@kajidog/investigation-shared'
 import { getServerConfig, HARD_MAX_ROWS } from '../config.js'
 import type { DatadogLogsClient } from './client.js'
-import type { RawLog } from './normalize.js'
+import type { RawAggregateBucket, RawLog } from './normalize.js'
 import { DEFAULT_CAPS, type NormalizeCaps, normalizeFacet, normalizeLogRow, normalizeTimeline } from './normalize.js'
 import { pickInterval, resolveRange } from './time.js'
 
@@ -34,11 +34,15 @@ export async function runInvestigation(
   }
 
   const base = { query: params.query, from: params.from, to: params.to }
-  const [search, timeseriesBuckets, ...facetBuckets] = await Promise.all([
-    client.searchLogs({ ...base, limit, cursor: params.cursor, sort: '-timestamp' }),
-    client.aggregateTimeseriesByStatus({ ...base, interval: interval.label }),
-    ...facets.map((facet) => client.aggregateByFacet({ ...base, facet })),
-  ])
+
+  // Keep these calls sequential. A full investigation issues several Logs API
+  // requests; firing them all at once makes small Datadog orgs hit 429 quickly.
+  const search = await client.searchLogs({ ...base, limit, cursor: params.cursor, sort: '-timestamp' })
+  const timeseriesBuckets = await client.aggregateTimeseriesByStatus({ ...base, interval: interval.label })
+  const facetBuckets: RawAggregateBucket[][] = []
+  for (const facet of facets) {
+    facetBuckets.push(await client.aggregateByFacet({ ...base, facet }))
+  }
 
   const rawById = new Map<string, RawLog>()
   for (const log of search.logs) {

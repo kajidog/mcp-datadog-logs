@@ -94,6 +94,16 @@ Required Datadog permissions are documented in
 external requests) to `MCP_DATADOG_EXPORT_DIR`. Open it in any browser to view
 or share; use the browser's *Print → Save as PDF* for a PDF copy.
 
+## Rate limits
+
+Datadog APIs can return `429 Too Many Requests` when an endpoint's rate limit is
+exceeded. This server enables the Datadog SDK retry behavior for 429/5xx
+responses and runs the multi-request investigation pipeline sequentially to avoid
+request bursts.
+
+If 429 still occurs, wait for the Datadog rate-limit window to reset and retry
+with a narrower time range or fewer repeated UI refreshes.
+
 ## License
 
 MIT
