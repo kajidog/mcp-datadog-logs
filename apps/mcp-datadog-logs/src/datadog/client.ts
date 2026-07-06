@@ -125,7 +125,10 @@ export function describeDatadogError(error: unknown): string {
     )
   }
   if (code === 401) {
-    return 'Datadog API returned 401 Unauthorized. Check DD_API_KEY.'
+    return (
+      'Datadog API returned 401 Unauthorized. Check that DD_API_KEY is valid, ' +
+      'DD_SITE matches the Datadog region where the key was created, and DD_APP_KEY belongs to the same org.'
+    )
   }
   if (code === 429) {
     return 'Datadog API rate limit exceeded (429). Wait a moment and retry with a narrower query.'

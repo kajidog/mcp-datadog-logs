@@ -76,7 +76,11 @@ npx -y @kajidog/mcp-datadog-logs
 - `DD_APP_KEY`
 - `DD_SITE`
 
+Japan site の場合、MCP 側も必ず `DD_SITE=ap1.datadoghq.com` を指定してください。`DD_SITE` を省略すると `datadoghq.com` に送るため、AP1 の key では 401 になります。
+
 詳細は [apps/mcp-datadog-logs/README.md](./apps/mcp-datadog-logs/README.md) を見てください。
+
+Datadog Application Key に必要な権限は [docs/datadog-permissions.md](./docs/datadog-permissions.md) にまとめています。
 
 ## 開発
 
@@ -100,7 +104,7 @@ DD_API_KEY=... DD_APP_KEY=... pnpm --filter @kajidog/mcp-datadog-logs dev
 
 ```bash
 pnpm build
-DD_API_KEY=... DD_APP_KEY=... npx @modelcontextprotocol/inspector node apps/mcp-datadog-logs/dist/index.js
+DD_SITE=ap1.datadoghq.com DD_API_KEY=... DD_APP_KEY=... npx @modelcontextprotocol/inspector node apps/mcp-datadog-logs/dist/index.js
 ```
 
 ## リリース

@@ -29,7 +29,7 @@ Requires Node.js >= 20 and a Datadog API key + application key
 claude mcp add datadog-logs \
   -e DD_API_KEY=<your-api-key> \
   -e DD_APP_KEY=<your-app-key> \
-  -e DD_SITE=datadoghq.com \
+  -e DD_SITE=ap1.datadoghq.com \
   -- npx -y @kajidog/mcp-datadog-logs
 ```
 
@@ -44,7 +44,7 @@ claude mcp add datadog-logs \
       "env": {
         "DD_API_KEY": "<your-api-key>",
         "DD_APP_KEY": "<your-app-key>",
-        "DD_SITE": "datadoghq.com"
+        "DD_SITE": "ap1.datadoghq.com"
       }
     }
   }
@@ -53,16 +53,31 @@ claude mcp add datadog-logs \
 
 Then ask: *"Investigate error logs for the payments service in the last 4 hours"*.
 
+### MCP Inspector
+
+```bash
+DD_SITE=ap1.datadoghq.com \
+DD_API_KEY=<your-api-key> \
+DD_APP_KEY=<your-app-key> \
+npx @modelcontextprotocol/inspector node apps/mcp-datadog-logs/dist/index.js
+```
+
+Use the same `DD_SITE` as the Datadog org where the API key and application key
+were created. Japan is `ap1.datadoghq.com`; US1 is `datadoghq.com`.
+
 ## Environment variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DD_API_KEY` | ✅ | — | Datadog API key |
-| `DD_APP_KEY` | ✅ | — | Datadog application key (`logs_read_data` scope) |
+| `DD_APP_KEY` | ✅ | — | Datadog application key from the same org/site as `DD_API_KEY` (`logs_read_data` scope) |
 | `DD_SITE` | | `datadoghq.com` | Datadog site, e.g. `ap1.datadoghq.com`, `datadoghq.eu`, `us5.datadoghq.com` |
 | `DD_LOGS_INDEXES` | | all | Comma-separated log indexes to search |
 | `MCP_DATADOG_EXPORT_DIR` | | `~/Downloads` (or cwd) | Where exported HTML reports are written |
 | `MCP_DATADOG_MAX_ROWS` | | `200` | Max log rows per investigation (hard cap 500) |
+
+Required Datadog permissions are documented in
+[`docs/datadog-permissions.md`](../../docs/datadog-permissions.md).
 
 ## Tools
 
