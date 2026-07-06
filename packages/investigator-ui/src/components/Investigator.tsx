@@ -6,7 +6,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { createMockApp, MOCK_VIEW_UUID } from '@/hooks/devMockApp'
 import { exportReport, fetchLogDetail } from '@/hooks/toolClient'
+import { useDisplayMode } from '@/hooks/useDisplayMode'
 import { useInvestigation } from '@/hooks/useInvestigation'
+import { useMcpResizeNotifications } from '@/hooks/useMcpResizeNotifications'
+import { cn } from '@/lib/utils'
 import { FacetSidebar } from './FacetSidebar'
 import { LogTable } from './LogTable'
 import { QueryBar } from './QueryBar'
@@ -28,9 +31,10 @@ export function Investigator() {
   const [exporting, setExporting] = useState(false)
   const [exportPath, setExportPath] = useState<string | null>(null)
 
-  useApp({
+  const { app: connectedApp } = useApp({
     appInfo: { name: 'Datadog Logs Investigator', version: '1.0.0' },
-    capabilities: {},
+    capabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+    autoResize: false,
     onAppCreated: (createdApp: App) => {
       if (isStandaloneDev) {
         return
@@ -53,6 +57,20 @@ export function Investigator() {
       }
     },
   })
+  const displayMode = useDisplayMode(isStandaloneDev ? null : connectedApp)
+  const fullscreen = displayMode.displayMode === 'fullscreen'
+  const resizeTrigger = [
+    phase,
+    fullscreen ? 'fullscreen' : 'inline',
+    running ? 'running' : 'idle',
+    loadingMore ? 'loadingMore' : 'idle',
+    result?.fetchedAt ?? '',
+    result?.rows.length ?? 0,
+    result?.nextCursor ?? '',
+    error ?? '',
+    exportPath ?? '',
+  ].join(':')
+  useMcpResizeNotifications(isStandaloneDev ? null : connectedApp, resizeTrigger)
 
   // DEV standalone mode: render with a mock bridge + fixture data.
   useEffect(() => {
@@ -107,6 +125,11 @@ export function Investigator() {
     }
   }
 
+  const handleToggleFullscreen = () => {
+    if (fullscreen) void displayMode.requestInline()
+    else void displayMode.requestFullscreen()
+  }
+
   if (phase === 'connecting' || phase === 'waiting' || phase === 'loading') {
     return (
       <CenteredNotice>
@@ -135,13 +158,21 @@ export function Investigator() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col gap-3 p-3">
+    <div
+      data-display-mode={displayMode.displayMode}
+      className={cn(
+        'flex flex-col gap-3 p-3',
+        fullscreen ? 'h-svh min-h-0 overflow-y-auto md:overflow-hidden' : 'min-h-svh'
+      )}
+    >
       <QueryBar
         query={query}
         from={from}
         to={to}
         running={running}
         exporting={exporting}
+        fullscreen={fullscreen}
+        canFullscreen={displayMode.canFullscreen}
         onQueryChange={setQuery}
         onRangeChange={(f, t) => {
           setFrom(f)
@@ -149,6 +180,7 @@ export function Investigator() {
         }}
         onRun={() => handleRun()}
         onExport={handleExport}
+        onToggleFullscreen={handleToggleFullscreen}
       />
 
       {error && (
@@ -169,10 +201,19 @@ export function Investigator() {
         {result.params.title ? ` · ${result.params.title}` : ''}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-[13rem_1fr]">
-        <FacetSidebar facets={result.facets} onSelect={handleFacetSelect} />
-        <div className="flex min-w-0 flex-col gap-3">
-          <Card className="py-3">
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-3 md:grid-cols-[13rem_1fr]',
+          fullscreen && 'md:min-h-0 md:flex-1 md:overflow-hidden'
+        )}
+      >
+        <FacetSidebar
+          facets={result.facets}
+          onSelect={handleFacetSelect}
+          className={fullscreen ? 'md:min-h-0 md:overflow-auto md:pr-1' : undefined}
+        />
+        <div className={cn('flex min-w-0 flex-col gap-3', fullscreen && 'md:min-h-0 md:overflow-hidden')}>
+          <Card className="shrink-0 py-3">
             <CardContent className="px-3">
               <TimelineChart
                 timeline={result.timeline}
@@ -181,8 +222,8 @@ export function Investigator() {
               />
             </CardContent>
           </Card>
-          <Card className="py-1">
-            <CardContent className="px-1">
+          <Card className={cn('py-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-hidden')}>
+            <CardContent className={cn('px-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-auto')}>
               <LogTable
                 rows={result.rows}
                 hasMore={Boolean(result.nextCursor)}

@@ -1,14 +1,16 @@
 import type { FacetBreakdown } from '@kajidog/investigation-shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 interface FacetSidebarProps {
   facets: FacetBreakdown[]
   onSelect: (facet: string, value: string) => void
+  className?: string
 }
 
-export function FacetSidebar({ facets, onSelect }: FacetSidebarProps) {
+export function FacetSidebar({ facets, onSelect, className }: FacetSidebarProps) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className={cn('flex flex-col gap-3', className)}>
       {facets.map((facet) => {
         const max = Math.max(...facet.values.map((v) => v.count), 1)
         return (

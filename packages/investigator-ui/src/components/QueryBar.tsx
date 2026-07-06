@@ -1,4 +1,4 @@
-import { Download, Loader2, Play } from 'lucide-react'
+import { Download, Loader2, Maximize2, Minimize2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TimeRangePicker } from './TimeRangePicker'
@@ -9,10 +9,13 @@ interface QueryBarProps {
   to: string
   running: boolean
   exporting: boolean
+  fullscreen: boolean
+  canFullscreen: boolean
   onQueryChange: (query: string) => void
   onRangeChange: (from: string, to: string) => void
   onRun: () => void
   onExport: () => void
+  onToggleFullscreen: () => void
 }
 
 export function QueryBar({
@@ -21,10 +24,13 @@ export function QueryBar({
   to,
   running,
   exporting,
+  fullscreen,
+  canFullscreen,
   onQueryChange,
   onRangeChange,
   onRun,
   onExport,
+  onToggleFullscreen,
 }: QueryBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -49,6 +55,17 @@ export function QueryBar({
         {exporting ? <Loader2 className="animate-spin" /> : <Download />}
         Export
       </Button>
+      {canFullscreen && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onToggleFullscreen}
+          aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          {fullscreen ? <Minimize2 /> : <Maximize2 />}
+        </Button>
+      )}
     </div>
   )
 }
