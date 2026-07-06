@@ -42,7 +42,8 @@ export function QueryBar({
             onRun()
           }
         }}
-        placeholder="Search logs, e.g. service:payments status:error"
+        placeholder="Type words to search log messages, or click a value in the left panel to filter"
+        title="Datadog query syntax also works, e.g. service:payments status:error"
         className="min-w-48 flex-1 font-mono text-xs"
         aria-label="Log search query"
       />

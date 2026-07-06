@@ -1,7 +1,7 @@
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { CircleAlert, Loader2 } from 'lucide-react'
+import { CircleAlert, Loader2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { createMockApp, MOCK_VIEW_UUID } from '@/hooks/devMockApp'
@@ -10,7 +10,7 @@ import { useDisplayMode } from '@/hooks/useDisplayMode'
 import { useInvestigation } from '@/hooks/useInvestigation'
 import { useMcpResizeNotifications } from '@/hooks/useMcpResizeNotifications'
 import { cn } from '@/lib/utils'
-import { FacetSidebar } from './FacetSidebar'
+import { FACET_META, facetKey, FacetSidebar } from './FacetSidebar'
 import { LogTable } from './LogTable'
 import { QueryBar } from './QueryBar'
 import { TimelineChart } from './TimelineChart'
@@ -96,9 +96,21 @@ export function Investigator() {
     void run({ query: nextQuery, from, to, groupBy: result?.params.groupBy })
   }
 
+  // facet:value tokens currently present in the query, shown as removable chips.
+  const activeFilters = parseFacetTokens(query)
+  const activeKeys = new Set(activeFilters.map((t) => facetKey(t.facet, t.value)))
+
   const handleFacetSelect = (facet: string, value: string) => {
-    const token = `${facet}:${quoteValue(value)}`
-    const nextQuery = query.includes(token) ? query : `${query.trim()} ${token}`.trim()
+    const existing = activeFilters.find((t) => t.facet === facet && t.value === value)
+    const nextQuery = existing
+      ? removeRange(query, existing.start, existing.end)
+      : `${query.trim()} ${facet}:${quoteValue(value)}`.trim()
+    setQuery(nextQuery)
+    handleRun(nextQuery)
+  }
+
+  const handleRemoveFilter = (filter: FacetToken) => {
+    const nextQuery = removeRange(query, filter.start, filter.end)
     setQuery(nextQuery)
     handleRun(nextQuery)
   }
@@ -183,6 +195,25 @@ export function Investigator() {
         onToggleFullscreen={handleToggleFullscreen}
       />
 
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground">Showing only:</span>
+          {activeFilters.map((filter) => (
+            <button
+              key={`${filter.start}:${filter.token}`}
+              type="button"
+              onClick={() => handleRemoveFilter(filter)}
+              title="Remove this filter"
+              className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1.5 hover:bg-accent"
+            >
+              <span className="text-muted-foreground">{FACET_META[filter.facet]?.label ?? filter.facet}:</span>
+              <span className="max-w-40 truncate font-medium">{filter.value}</span>
+              <X className="size-3 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-status-error/40 bg-status-error/10 px-3 py-2 text-xs">
           <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-status-error" />
@@ -209,6 +240,7 @@ export function Investigator() {
       >
         <FacetSidebar
           facets={result.facets}
+          activeKeys={activeKeys}
           onSelect={handleFacetSelect}
           className={fullscreen ? 'md:min-h-0 md:overflow-auto md:pr-1' : undefined}
         />
@@ -259,4 +291,37 @@ function quoteValue(value: string): string {
     return value
   }
   return `"${value.replace(/"/g, '\\"')}"`
+}
+
+interface FacetToken {
+  facet: string
+  value: string
+  token: string
+  /** Character range of the token within the query string */
+  start: number
+  end: number
+}
+
+const FACET_TOKEN_RE = /(^|\s)([\w@.-]+):("(?:[^"\\]|\\.)*"|\S+)/g
+
+function parseFacetTokens(query: string): FacetToken[] {
+  const tokens: FacetToken[] = []
+  for (const match of query.matchAll(FACET_TOKEN_RE)) {
+    const [, lead, facet, rawValue] = match
+    const start = (match.index ?? 0) + lead.length
+    const token = `${facet}:${rawValue}`
+    tokens.push({ facet, value: unquoteValue(rawValue), token, start, end: start + token.length })
+  }
+  return tokens
+}
+
+function unquoteValue(raw: string): string {
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
+    return raw.slice(1, -1).replace(/\\"/g, '"')
+  }
+  return raw
+}
+
+function removeRange(query: string, start: number, end: number): string {
+  return (query.slice(0, start) + query.slice(end)).replace(/\s+/g, ' ').trim()
 }
