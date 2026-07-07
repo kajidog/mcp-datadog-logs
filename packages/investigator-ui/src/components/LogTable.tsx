@@ -71,13 +71,13 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, 
 
   return (
     <div>
-      <Table>
+      <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-6" />
-            <TableHead className="w-40">時刻</TableHead>
-            <TableHead className="w-16">ステータス</TableHead>
-            <TableHead className="w-32">サービス</TableHead>
+            <TableHead className="w-8" />
+            <TableHead className="w-32 md:w-40">時刻</TableHead>
+            <TableHead className="w-24">ステータス</TableHead>
+            <TableHead className="w-32 max-md:hidden">サービス</TableHead>
             <TableHead>メッセージ</TableHead>
           </TableRow>
         </TableHeader>
@@ -109,10 +109,13 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, 
                       {row.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="max-w-32 truncate py-1.5 text-xs text-muted-foreground" title={row.service}>
+                  <TableCell
+                    className="truncate py-1.5 text-xs text-muted-foreground max-md:hidden"
+                    title={row.service}
+                  >
                     {row.service ?? '-'}
                   </TableCell>
-                  <TableCell className="max-w-0 truncate py-1.5 text-xs" title={row.message}>
+                  <TableCell className="truncate py-1.5 text-xs" title={row.message}>
                     {row.message || '(メッセージなし)'}
                   </TableCell>
                 </TableRow>
