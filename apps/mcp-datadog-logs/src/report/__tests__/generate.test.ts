@@ -50,7 +50,7 @@ describe('generateReport', () => {
     expect(html).toContain('ap1.datadoghq.com')
     expect(html).toContain('payments')
     expect(html).toContain('Total logs')
-    expect(html).toContain('<details>')
+    expect(html).toContain('<details data-status=')
   })
 
   it('renders escaped AI findings when present', () => {
@@ -72,14 +72,61 @@ describe('generateReport', () => {
     const html = generateReport(fixtureResult(), new Map([['log-1', raw]]))
     expect(html).toContain('… (truncated)')
   })
+
+  it('includes the interactive filter UI and inline script', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    expect(html).toContain('id="log-search"')
+    expect(html).toContain('id="clear-filters"')
+    expect(html).toContain('<script>')
+    expect(html).toContain('localStorage.getItem(THEME_KEY)')
+  })
+
+  it('includes a theme toggle and explicit light/dark theme CSS', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    expect(html).toContain('data-theme-value="light"')
+    expect(html).toContain('data-theme-value="dark"')
+    expect(html).toContain('data-theme-value="auto"')
+    expect(html).toContain(':root[data-theme="dark"]')
+    expect(html).toContain(':root:not([data-theme="light"])')
+  })
+
+  it('annotates log entries with data attributes for filtering', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    const tsMs = Date.parse('2026-07-06T10:01:00.000Z')
+    expect(html).toContain(`<details data-status="error" data-ts="${tsMs}">`)
+  })
+
+  it('renders legend statuses as toggle buttons', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    expect(html).toContain('class="item" data-status="error"')
+  })
 })
 
 describe('renderTimelineSvg', () => {
-  it('renders one stacked rect per non-zero status per bucket', () => {
+  it('renders one stacked rect per non-zero status per bucket, plus a hit rect per bucket', () => {
     const svg = renderTimelineSvg(fixtureResult().timeline)
     const rects = svg.match(/<rect /g) ?? []
-    // bucket1: error+info (2), bucket2: error+warn (2)
-    expect(rects).toHaveLength(4)
+    // bucket1: hit+error+info (3), bucket2: hit+error+warn (3)
+    expect(rects).toHaveLength(6)
+    expect(svg.match(/<rect class="hit"/g)).toHaveLength(2)
+  })
+
+  it('wraps each bucket in a clickable group with its time range', () => {
+    const timeline = fixtureResult().timeline
+    const endMs = Date.parse('2026-07-06T10:10:00Z')
+    const svg = renderTimelineSvg(timeline, { endMs })
+    const from1 = Date.parse(timeline[0].time)
+    const from2 = Date.parse(timeline[1].time)
+    expect(svg).toContain(`<g class="bucket" data-from="${from1}" data-to="${from2}"`)
+    expect(svg).toContain(`<g class="bucket" data-from="${from2}" data-to="${endMs}"`)
+  })
+
+  it('falls back to the previous bucket width for the last bucket without endMs', () => {
+    const timeline = fixtureResult().timeline
+    const svg = renderTimelineSvg(timeline)
+    const from2 = Date.parse(timeline[1].time)
+    const width = from2 - Date.parse(timeline[0].time)
+    expect(svg).toContain(`data-from="${from2}" data-to="${from2 + width}"`)
   })
 
   it('renders a no-data message for an empty timeline', () => {

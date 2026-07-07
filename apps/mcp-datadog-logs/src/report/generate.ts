@@ -1,5 +1,6 @@
 import type { FacetBreakdown, InvestigationResult, LogRow } from '@kajidog/investigation-shared'
 import type { RawLog } from '../datadog/normalize.js'
+import { REPORT_JS } from './script.js'
 import { REPORT_CSS } from './styles.js'
 import { renderTimelineSvg, stackStatuses, statusColor } from './svg-timeline.js'
 
@@ -35,11 +36,18 @@ export function generateReport(
 <body>
 <main>
   <header>
-    <h1>${escapeHtml(title)}</h1>
-    <div class="meta">
-      Query: <code>${escapeHtml(result.params.query)}</code><br>
-      Range: ${escapeHtml(result.params.from)} → ${escapeHtml(result.params.to)} — ${escapeHtml(range)}<br>
-      Generated: ${escapeHtml(generatedAt)}${options.site ? ` · Site: ${escapeHtml(options.site)}` : ''}
+    <div>
+      <h1>${escapeHtml(title)}</h1>
+      <div class="meta">
+        Query: <code>${escapeHtml(result.params.query)}</code><br>
+        Range: ${escapeHtml(result.params.from)} → ${escapeHtml(result.params.to)} — ${escapeHtml(range)}<br>
+        Generated: ${escapeHtml(generatedAt)}${options.site ? ` · Site: ${escapeHtml(options.site)}` : ''}
+      </div>
+    </div>
+    <div class="theme-toggle" role="group" aria-label="Color theme">
+      <button type="button" data-theme-value="auto">Auto</button>
+      <button type="button" data-theme-value="light">Light</button>
+      <button type="button" data-theme-value="dark">Dark</button>
     </div>
   </header>
   ${renderStatTiles(result)}
@@ -49,6 +57,7 @@ export function generateReport(
   ${renderLogsSection(result, rawById)}
   <footer>Exported by @kajidog/mcp-datadog-logs · ${escapeHtml(result.rows.length.toString())} of ~${escapeHtml(result.totalCount.toString())} matching logs included</footer>
 </main>
+<script>${REPORT_JS}</script>
 </body>
 </html>
 `
@@ -80,19 +89,20 @@ function renderFindingsSection(findings: string | undefined): string {
 
 function renderTimelineSection(result: InvestigationResult): string {
   const rangeMs = result.resolvedRange.toMs - result.resolvedRange.fromMs
-  const svg = renderTimelineSvg(result.timeline, { rangeMs })
+  const svg = renderTimelineSvg(result.timeline, { rangeMs, endMs: result.resolvedRange.toMs })
   const legend = stackStatuses(result.timeline)
     .reverse()
     .map(
       (status) =>
-        `<span class="item"><span class="swatch" style="background:${statusColor(status)}"></span>${escapeHtml(status)}</span>`
+        `<button type="button" class="item" data-status="${escapeHtml(status)}" aria-pressed="false"><span class="swatch" style="background:${statusColor(status)}"></span>${escapeHtml(status)}</button>`
     )
     .join('')
   return `<section>
     <h2>Log volume (per ${escapeHtml(result.interval)})</h2>
-    <div class="card">
+    <div class="card timeline">
       <div class="chart-scroll">${svg}</div>
       ${legend ? `<div class="legend">${legend}</div>` : ''}
+      <p class="chart-hint">Click a bar to filter the log list to that time bucket; click a legend status to filter by status. Click again to clear.</p>
     </div>
   </section>`
 }
@@ -123,7 +133,13 @@ function renderLogsSection(result: InvestigationResult, rawById: Map<string, Raw
   const entries = result.rows.map((row) => renderLogEntry(row, rawById.get(row.id))).join('')
   return `<section>
     <h2>Logs (${result.rows.length})</h2>
-    <div class="card logs">${entries || '<p>No log entries.</p>'}</div>
+    <div class="log-toolbar">
+      <input id="log-search" type="search" placeholder="Filter logs by text…" aria-label="Filter logs by text">
+      <span id="active-filters"></span>
+      <button type="button" id="clear-filters" hidden>Clear filters</button>
+      <span class="count" id="log-count"></span>
+    </div>
+    <div class="card logs">${entries || '<p>No log entries.</p>'}<p class="no-match" id="log-no-match" hidden>No logs match the current filters.</p></div>
   </section>`
 }
 
@@ -133,7 +149,8 @@ function renderLogEntry(row: LogRow, raw: RawLog | undefined): string {
   if (detail.length > MAX_RAW_JSON_CHARS) {
     detail = `${detail.slice(0, MAX_RAW_JSON_CHARS)}\n… (truncated)`
   }
-  return `<details>
+  const tsMs = Date.parse(row.timestamp)
+  return `<details data-status="${escapeHtml(row.status)}"${Number.isNaN(tsMs) ? '' : ` data-ts="${tsMs}"`}>
     <summary>
       <span class="time">${escapeHtml(row.timestamp)}</span>
       <span class="status-badge ${statusClass}">${escapeHtml(row.status)}</span>
