@@ -2,9 +2,10 @@ import type { TimelineBucket } from '@kajidog/investigation-shared'
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { CircleAlert, ListFilter, Loader2, NotebookPen, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, ListFilter, Loader2, NotebookPen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { createMockApp, MOCK_VIEW_UUID } from '@/hooks/devMockApp'
 import { exportReport, fetchLogDetail } from '@/hooks/toolClient'
@@ -14,6 +15,7 @@ import { useMcpResizeNotifications } from '@/hooks/useMcpResizeNotifications'
 import { cn } from '@/lib/utils'
 import { FACET_META, FacetSidebar, facetKey } from './FacetSidebar'
 import { LogTable } from './LogTable'
+import { Markdown } from './Markdown'
 import { QueryBar } from './QueryBar'
 import { TimelineChart } from './TimelineChart'
 
@@ -269,11 +271,19 @@ export function Investigator() {
       {result.findings && (
         <Card className="shrink-0 py-3">
           <CardContent className="px-3">
-            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <NotebookPen className="size-3.5" aria-hidden />
-              AI の調査メモ
-            </div>
-            <p className="whitespace-pre-wrap text-sm">{result.findings}</p>
+            <Collapsible defaultOpen>
+              <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <NotebookPen className="size-3.5" aria-hidden />
+                AI の調査メモ
+                <ChevronDown
+                  className="size-3.5 transition-transform group-data-[state=closed]:-rotate-90"
+                  aria-hidden
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-1.5">
+                <Markdown>{result.findings}</Markdown>
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         </Card>
       )}
