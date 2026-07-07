@@ -34,6 +34,7 @@ export function Investigator() {
 
   const [exporting, setExporting] = useState(false)
   const [exportPath, setExportPath] = useState<string | null>(null)
+  const [exportOpenError, setExportOpenError] = useState<string | null>(null)
 
   // Client-side narrowing of already-fetched rows — no API call involved.
   const [localKeyword, setLocalKeyword] = useState('')
@@ -134,6 +135,7 @@ export function Investigator() {
 
   const handleRun = (nextQuery = query) => {
     setExportPath(null)
+    setExportOpenError(null)
     void run({ query: nextQuery, from, to, groupBy: result?.params.groupBy })
   }
 
@@ -164,10 +166,12 @@ export function Investigator() {
     }
     setExporting(true)
     setExportPath(null)
+    setExportOpenError(null)
     try {
       const exported = await exportReport(app, viewUUID, result?.params.title)
       if (exported.ok && exported.path) {
         setExportPath(exported.path)
+        setExportOpenError(exported.openError ?? null)
       } else {
         setError(exported.error ?? 'エクスポートに失敗しました')
       }
@@ -263,8 +267,16 @@ export function Investigator() {
       )}
 
       {exportPath && (
-        <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
-          レポートを書き出しました: <code className="font-mono">{exportPath}</code>
+        <div className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+          <div>
+            レポートを書き出しました: <code className="font-mono">{exportPath}</code>
+          </div>
+          {exportOpenError && (
+            <div className="flex items-start gap-1.5 text-muted-foreground">
+              <CircleAlert className="mt-0.5 size-3 shrink-0 text-status-warn" />
+              <span>ブラウザで開けませんでした: {exportOpenError}</span>
+            </div>
+          )}
         </div>
       )}
 

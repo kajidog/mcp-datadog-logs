@@ -97,8 +97,10 @@ Required Datadog permissions are documented in
 ## Exported reports
 
 `Export` in the UI writes a single `.html` file (inline CSS + SVG chart, no
-external requests) to `MCP_DATADOG_EXPORT_DIR`. Open it in any browser to view
-or share; use the browser's *Print → Save as PDF* for a PDF copy.
+external requests) to `MCP_DATADOG_EXPORT_DIR` and asks the OS to open it in the
+default browser. If the server is running in a headless or remote environment,
+the file is still written and the UI shows the saved path. Use the browser's
+*Print → Save as PDF* for a PDF copy.
 
 ## Rate limits
 

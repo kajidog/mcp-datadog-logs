@@ -107,7 +107,7 @@ export function createMockApp(): App {
             },
           })
         case '_export_report':
-          return json({ ok: true, path: '/home/dev/Downloads/datadog-logs-report-20260706-120000.html' })
+          return json({ ok: true, path: '/home/dev/Downloads/datadog-logs-report-20260706-120000.html', opened: true })
         default:
           return json({ notFound: true })
       }

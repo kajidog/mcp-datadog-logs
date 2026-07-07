@@ -82,6 +82,10 @@ export interface ViewNotFound {
 export interface ExportResult {
   ok: boolean
   path?: string
+  /** True when the server successfully launched, or likely launched, the system browser. */
+  opened?: boolean
+  /** HTML export succeeded, but launching the browser failed. */
+  openError?: string
   error?: string
 }
 
