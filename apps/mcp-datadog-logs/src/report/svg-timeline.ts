@@ -25,12 +25,19 @@ interface TimelineSvgOptions {
   width?: number
   height?: number
   rangeMs?: number
+  /** Absolute end of the investigated range (epoch ms) — caps the last bucket. */
+  endMs?: number
 }
 
 /**
  * Renders the timeline as a stacked bar SVG string (no dependencies).
  * Marks follow the dataviz spec: 2px gaps between bars, recessive hairline
  * gridlines, muted axis labels using chart-chrome CSS variables.
+ *
+ * Each bucket is wrapped in a focusable <g class="bucket"> carrying
+ * data-from/data-to (epoch ms) so the report script can filter logs by
+ * clicking a bar. A transparent full-height hit rect makes short bars easy
+ * to click.
  */
 export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineSvgOptions = {}): string {
   const width = options.width ?? 1000
@@ -74,9 +81,18 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
 
   const labelEvery = Math.max(1, Math.ceil(n / 8))
   const useDateLabel = (options.rangeMs ?? 0) > 86_400_000
+  const bucketRanges = resolveBucketRanges(timeline, options)
 
   timeline.forEach((bucket, i) => {
     const x = pad.left + i * (barW + gap)
+    const range = bucketRanges[i]
+    const rangeAttrs = range ? ` data-from="${range.fromMs}" data-to="${range.toMs}"` : ''
+    parts.push(
+      `<g class="bucket"${rangeAttrs} tabindex="0" role="button" aria-label="Filter logs to ${escapeXml(formatTime(bucket.time, useDateLabel))}">`
+    )
+    parts.push(
+      `<rect class="hit" x="${x.toFixed(1)}" y="${pad.top}" width="${barW.toFixed(1)}" height="${plotH.toFixed(1)}" fill="transparent"/>`
+    )
     let yCursor = pad.top + plotH
     for (const status of statuses) {
       const count = bucket.counts[status] ?? 0
@@ -90,6 +106,7 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
         `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${drawH.toFixed(1)}" fill="${statusColor(status)}" rx="1"><title>${escapeXml(formatTime(bucket.time, useDateLabel))} ${status}: ${count}</title></rect>`
       )
     }
+    parts.push('</g>')
     if (i % labelEvery === 0) {
       parts.push(
         `<text x="${(x + barW / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--text-muted)" font-size="11">${escapeXml(formatTime(bucket.time, useDateLabel))}</text>`
@@ -99,6 +116,34 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
 
   parts.push('</svg>')
   return parts.join('')
+}
+
+/**
+ * Each bucket spans from its start to the next bucket's start; the last
+ * bucket ends at options.endMs when provided, otherwise the previous bucket
+ * width (or 60s for a single bucket) is reused.
+ */
+function resolveBucketRanges(
+  timeline: TimelineBucket[],
+  options: TimelineSvgOptions
+): Array<{ fromMs: number; toMs: number } | undefined> {
+  const starts = timeline.map((b) => Date.parse(b.time))
+  return starts.map((fromMs, i) => {
+    if (Number.isNaN(fromMs)) {
+      return undefined
+    }
+    let toMs: number
+    if (i < starts.length - 1 && !Number.isNaN(starts[i + 1])) {
+      toMs = starts[i + 1]
+    } else if (options.endMs !== undefined && options.endMs > fromMs) {
+      toMs = options.endMs
+    } else if (i > 0 && !Number.isNaN(starts[i - 1])) {
+      toMs = fromMs + (fromMs - starts[i - 1])
+    } else {
+      toMs = fromMs + 60_000
+    }
+    return { fromMs, toMs }
+  })
 }
 
 function formatTime(iso: string, withDate: boolean): string {
