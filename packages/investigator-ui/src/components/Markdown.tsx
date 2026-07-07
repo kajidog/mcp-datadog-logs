@@ -1,4 +1,5 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 
@@ -46,7 +47,7 @@ const components: Components = {
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cn('text-sm leading-relaxed break-words', className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {children}
       </ReactMarkdown>
     </div>
