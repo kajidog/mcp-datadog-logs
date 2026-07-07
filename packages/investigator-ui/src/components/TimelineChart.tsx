@@ -84,10 +84,7 @@ export function TimelineChart({ timeline, interval, rangeMs, selectedBucket, onB
               radius={i === keys.length - 1 ? [2, 2, 0, 0] : 0}
             >
               {data.map((row) => (
-                <Cell
-                  key={String(row.time)}
-                  fillOpacity={selectedBucket && row.time !== selectedBucket ? 0.3 : 1}
-                />
+                <Cell key={String(row.time)} fillOpacity={selectedBucket && row.time !== selectedBucket ? 0.3 : 1} />
               ))}
             </Bar>
           ))}

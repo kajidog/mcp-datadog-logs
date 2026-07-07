@@ -49,9 +49,7 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, 
 
   if (rows.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        {emptyMessage ?? 'この範囲にログはありません。'}
-      </p>
+      <p className="py-6 text-center text-sm text-muted-foreground">{emptyMessage ?? 'この範囲にログはありません。'}</p>
     )
   }
 

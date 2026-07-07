@@ -1,0 +1,61 @@
+import { randomUUID } from 'node:crypto'
+import type { InvestigationParams, InvestigationResult } from '@kajidog/investigation-shared'
+import { getDatadogClient } from '../../datadog/client.js'
+import { runInvestigation } from '../../datadog/investigation.js'
+import { getSession, type InvestigationSession, setSession } from './runtime.js'
+
+export interface StoreRunOptions {
+  /** Update this session when present and found; otherwise create/recreate one under this ID */
+  viewUUID?: string
+  params: InvestigationParams
+  /** Replaces stored findings when provided; existing findings are preserved otherwise */
+  findings?: string
+}
+
+export interface StoredRun {
+  viewUUID: string
+  session: InvestigationSession
+}
+
+/**
+ * Run the investigation pipeline and persist the result in the session store.
+ * With a cursor + existing session this is a load-more: the new page of rows
+ * is merged (deduped by row id) into the stored session so exports and the UI
+ * include everything loaded so far.
+ */
+export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<StoredRun> {
+  const client = getDatadogClient()
+  const existing = opts.viewUUID ? getSession(opts.viewUUID) : undefined
+  const title = opts.params.title ?? existing?.title
+  const { result, rawById } = await runInvestigation(client, { ...opts.params, title })
+
+  if (opts.params.cursor && existing) {
+    const seen = new Set(existing.result.rows.map((r) => r.id))
+    result.rows = [...existing.result.rows, ...result.rows.filter((r) => !seen.has(r.id))]
+    for (const [id, raw] of existing.rawById) {
+      if (!rawById.has(id)) {
+        rawById.set(id, raw)
+      }
+    }
+  }
+
+  // Reuse a passed-but-evicted viewUUID so callers keep a stable handle; the
+  // session is simply recreated (previous rows/findings are gone).
+  const viewUUID = opts.viewUUID ?? randomUUID()
+  const now = Date.now()
+  const session: InvestigationSession = {
+    result,
+    rawById,
+    title,
+    findings: opts.findings ?? existing?.findings,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  }
+  setSession(viewUUID, session)
+  return { viewUUID, session }
+}
+
+/** InvestigationResult with session.findings stitched in — the wire payload for the UI. */
+export function sessionResult(session: InvestigationSession): InvestigationResult {
+  return session.findings ? { ...session.result, findings: session.findings } : session.result
+}

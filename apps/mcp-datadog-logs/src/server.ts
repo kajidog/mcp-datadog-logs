@@ -3,6 +3,7 @@ import { registerAggregateLogsTool } from './tools/aggregate-logs.js'
 import { registerInvestigateAppTools } from './tools/investigate/app-tools.js'
 import { registerInvestigateTool } from './tools/investigate/investigate-tool.js'
 import { registerInvestigatorResource } from './tools/investigate/resource.js'
+import { registerRunInvestigationTool } from './tools/investigate/run-investigation-tool.js'
 import { registerSearchLogsTool } from './tools/search-logs.js'
 import { VERSION } from './version.js'
 
@@ -16,6 +17,7 @@ export function createServer(): McpServer {
   registerInvestigatorResource(server)
   registerSearchLogsTool(server)
   registerAggregateLogsTool(server)
+  registerRunInvestigationTool(server)
   registerInvestigateTool(server)
   registerInvestigateAppTools(server)
 

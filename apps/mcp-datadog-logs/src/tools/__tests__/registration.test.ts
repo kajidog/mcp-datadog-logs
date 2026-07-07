@@ -22,6 +22,7 @@ describe('createServer tool registration', () => {
       expect.arrayContaining([
         'datadog_search_logs',
         'datadog_aggregate_logs',
+        'datadog_run_investigation',
         'datadog_investigate_logs',
         '_get_view_state',
         '_run_investigation',
@@ -38,5 +39,7 @@ describe('createServer tool registration', () => {
     }
     // model-facing search tools do not open the UI
     expect(tools.datadog_search_logs._meta?.ui?.resourceUri).toBeUndefined()
+    // headless investigation tool is model-facing and must not open the UI
+    expect(tools.datadog_run_investigation._meta?.ui).toBeUndefined()
   })
 })

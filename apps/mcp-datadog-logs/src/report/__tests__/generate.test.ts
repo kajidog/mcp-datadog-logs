@@ -53,6 +53,20 @@ describe('generateReport', () => {
     expect(html).toContain('<details>')
   })
 
+  it('renders escaped AI findings when present', () => {
+    const html = generateReport(
+      { ...fixtureResult(), findings: 'Root cause: <script>alert(1)</script>\nline2' },
+      new Map()
+    )
+    expect(html).toContain('AI Findings')
+    expect(html).not.toContain('<script>alert(1)')
+    expect(html).toContain('Root cause: &lt;script&gt;alert(1)&lt;/script&gt;\nline2')
+  })
+
+  it('omits the findings section when findings are absent', () => {
+    expect(generateReport(fixtureResult(), new Map())).not.toContain('AI Findings')
+  })
+
   it('includes raw detail JSON when available, truncated when huge', () => {
     const raw = { id: 'log-1', attributes: { message: 'y'.repeat(10_000) } }
     const html = generateReport(fixtureResult(), new Map([['log-1', raw]]))

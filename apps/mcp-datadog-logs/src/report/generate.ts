@@ -43,6 +43,7 @@ export function generateReport(
     </div>
   </header>
   ${renderStatTiles(result)}
+  ${renderFindingsSection(result.findings)}
   ${renderTimelineSection(result)}
   ${renderFacetsSection(result.facets)}
   ${renderLogsSection(result, rawById)}
@@ -64,6 +65,16 @@ function renderStatTiles(result: InvestigationResult): string {
     <div class="card tile"><div class="label">Errors</div><div class="value${errors > 0 ? ' error' : ''}">${formatCount(errors)}</div></div>
     <div class="card tile"><div class="label">Warnings</div><div class="value">${formatCount(count('warn'))}</div></div>
     <div class="card tile"><div class="label">Services</div><div class="value">${formatCount(serviceCount)}</div></div>
+  </section>`
+}
+
+function renderFindingsSection(findings: string | undefined): string {
+  if (!findings) {
+    return ''
+  }
+  return `<section>
+    <h2>AI Findings</h2>
+    <div class="card"><p class="findings">${escapeHtml(findings)}</p></div>
   </section>`
 }
 

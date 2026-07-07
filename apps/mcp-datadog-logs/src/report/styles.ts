@@ -63,6 +63,7 @@ h2 { font-size: 15px; margin: 0 0 12px; color: var(--text-primary); }
   padding: 16px;
 }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.findings { white-space: pre-wrap; margin: 0; font-size: 13px; color: var(--text-secondary); }
 .tile .label { color: var(--text-muted); font-size: 12px; }
 .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
 .tile .value.error { color: var(--status-error); }

@@ -7,6 +7,8 @@ export interface InvestigationSession {
   result: InvestigationResult
   rawById: Map<string, RawLog>
   title?: string
+  /** AI-authored findings/notes (plain text), shown in the UI and HTML report */
+  findings?: string
   createdAt: number
   updatedAt: number
 }
@@ -32,7 +34,13 @@ export function setSession(viewUUID: string, session: InvestigationSession): voi
 }
 
 export function getSession(viewUUID: string): InvestigationSession | undefined {
-  return sessions.get(viewUUID)
+  const session = sessions.get(viewUUID)
+  if (session) {
+    // LRU touch: keep actively used sessions from being evicted.
+    sessions.delete(viewUUID)
+    sessions.set(viewUUID, session)
+  }
+  return session
 }
 
 /** Test hook. */

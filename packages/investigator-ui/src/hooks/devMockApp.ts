@@ -67,6 +67,9 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
     ],
     rows,
     nextCursor: 'mock-cursor',
+    findings:
+      'payments サービスで 12:00 以降 upstream timeout が急増。\n' +
+      '直前のデプロイ (v2.31.0) と時間帯が一致しており、DB コネクションプール枯渇の可能性が高い。',
     fetchedAt: new Date().toISOString(),
     resolvedRange: { fromMs: now - buckets * stepMs, toMs: now },
   }
