@@ -70,12 +70,30 @@ export const REPORT_JS = `
     return state.query !== '' || state.fromMs !== null || activeStatuses().length > 0;
   }
 
+  // Time zone comes from the data-time-zone attribute the server rendered
+  // (never interpolated into this script). Invalid zones fall back to UTC.
+  var reportTimeZone = root.getAttribute('data-time-zone') || 'UTC';
+  var bucketTimeFormat;
+  try {
+    bucketTimeFormat = newBucketTimeFormat(reportTimeZone);
+  } catch (e) {
+    reportTimeZone = 'UTC';
+    bucketTimeFormat = newBucketTimeFormat(reportTimeZone);
+  }
+
+  function newBucketTimeFormat(timeZone) {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone,
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+  }
+
   function formatBucketTime(ms) {
     var d = new Date(ms);
     if (isNaN(d.getTime())) return '';
-    function pad(n) { return (n < 10 ? '0' : '') + n; }
-    return pad(d.getUTCMonth() + 1) + '/' + pad(d.getUTCDate()) + ' ' +
-      pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+    var byType = {};
+    bucketTimeFormat.formatToParts(d).forEach(function (part) { byType[part.type] = part.value; });
+    return byType.month + '/' + byType.day + ' ' + byType.hour + ':' + byType.minute;
   }
 
   function renderChips() {
@@ -84,7 +102,7 @@ export const REPORT_JS = `
     if (state.fromMs !== null) {
       var chip = document.createElement('span');
       chip.className = 'filter-chip';
-      chip.textContent = 'Time: ' + formatBucketTime(state.fromMs) + ' \\u2013 ' + formatBucketTime(state.toMs) + ' UTC';
+      chip.textContent = 'Time: ' + formatBucketTime(state.fromMs) + ' \\u2013 ' + formatBucketTime(state.toMs) + ' ' + reportTimeZone;
       chipsHost.appendChild(chip);
     }
     activeStatuses().forEach(function (status) {

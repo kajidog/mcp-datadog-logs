@@ -15,6 +15,8 @@ needed).
   - the model receives only a compact summary — iterate without bloating context
   - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
     plain-text `findings` shown in the UI and the HTML report
+- 📄 `datadog_export_report` — export the HTML report directly from the model:
+  - pass a `viewUUID` to write the self-contained report to disk without opening the UI
 - 🖥️ `datadog_investigate_logs` — opens the interactive investigation UI:
   - stacked timeline chart of log volume by status
   - facet sidebar (service / status / host / custom `groupBy`) — click to filter
@@ -80,6 +82,7 @@ were created. Japan is `ap1.datadoghq.com`; US1 is `datadoghq.com`.
 | `DD_LOGS_INDEXES` | | all | Comma-separated log indexes to search |
 | `MCP_DATADOG_EXPORT_DIR` | | `~/Downloads` (or cwd) | Where exported HTML reports are written |
 | `MCP_DATADOG_MAX_ROWS` | | `200` | Max log rows per investigation (hard cap 500) |
+| `MCP_DATADOG_TIMEZONE` | | `UTC` | IANA time zone (e.g. `Asia/Tokyo`) for timestamps in exported HTML reports; invalid values fall back to UTC |
 
 Required Datadog permissions are documented in
 [`docs/datadog-permissions.md`](../../docs/datadog-permissions.md).
@@ -91,16 +94,20 @@ Required Datadog permissions are documented in
 | `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor |
 | `datadog_aggregate_logs` | model | Count by facet (`groupBy`) or timeseries (`interval`) |
 | `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
+| `datadog_export_report` | model | Write the self-contained HTML report for a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` — no UI needed |
 | `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |
 | `_get_view_state` / `_run_investigation` / `_get_log_detail` / `_export_report` | UI only | Internal bridge tools called by the app (hidden from the model) |
 
 ## Exported reports
 
-`Export` in the UI writes a single `.html` file (inline CSS + SVG chart, no
-external requests) to `MCP_DATADOG_EXPORT_DIR` and asks the OS to open it in the
-default browser. If the server is running in a headless or remote environment,
-the file is still written and the UI shows the saved path. Use the browser's
-*Print → Save as PDF* for a PDF copy.
+`Export` in the UI — or the `datadog_export_report` tool, when you ask the model
+to export a report directly — writes a single `.html` file (inline CSS + SVG
+chart, no external requests) to `MCP_DATADOG_EXPORT_DIR` and asks the OS to open
+it in the default browser. If the server is running in a headless or remote
+environment, the file is still written and the saved path is reported. Use the
+browser's *Print → Save as PDF* for a PDF copy.
+
+Report timestamps are rendered in `MCP_DATADOG_TIMEZONE` (default UTC).
 
 ## Rate limits
 

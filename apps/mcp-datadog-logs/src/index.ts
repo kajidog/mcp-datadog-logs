@@ -16,6 +16,7 @@ Environment variables:
   DD_LOGS_INDEXES          Comma-separated log indexes to search (default: all)
   MCP_DATADOG_EXPORT_DIR   Directory for exported HTML reports (default: ~/Downloads or cwd)
   MCP_DATADOG_MAX_ROWS     Max log rows per investigation (default: 200, max: 500)
+  MCP_DATADOG_TIMEZONE     IANA time zone for report timestamps (default: UTC; e.g. Asia/Tokyo)
 
 Options:
   --help      Show this help
