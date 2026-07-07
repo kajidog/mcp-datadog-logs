@@ -1,15 +1,10 @@
-import { spawn } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
-import { getServerConfig, HARD_MAX_ROWS } from '../../config.js'
-import { getDatadogClient } from '../../datadog/client.js'
-import { generateReport } from '../../report/generate.js'
+import { HARD_MAX_ROWS } from '../../config.js'
 import { registerPrefixedAppTool } from '../registration.js'
 import { createErrorResponse, jsonResult } from '../utils.js'
+import { exportInvestigationReport } from './export-report.js'
 import { getSession, investigatorResourceUri } from './runtime.js'
 import { runAndStoreInvestigation, sessionResult } from './session-ops.js'
 
@@ -131,104 +126,10 @@ export function registerInvestigateAppTools(server: McpServer): void {
     },
     async ({ viewUUID, title }: { viewUUID: string; title?: string }): Promise<CallToolResult> => {
       try {
-        const session = getSession(viewUUID)
-        if (!session) {
-          return jsonResult({ ok: false, error: 'Investigation session not found. Re-run the investigation first.' })
-        }
-        const html = generateReport(sessionResult(session), session.rawById, {
-          title: title ?? session.title,
-          site: safeSite(),
-        })
-        const { exportDir } = getServerConfig()
-        mkdirSync(exportDir, { recursive: true })
-        const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-')
-        const path = join(exportDir, `datadog-logs-report-${stamp}.html`)
-        writeFileSync(path, html, 'utf-8')
-        const openResult = await openExportedReport(path)
-        return jsonResult({ ok: true, path, ...openResult })
+        return jsonResult(await exportInvestigationReport({ viewUUID, title }))
       } catch (error) {
         return createErrorResponse(error)
       }
     }
   )
-}
-
-interface BrowserOpenCommand {
-  command: string
-  args: string[]
-}
-
-interface BrowserOpenResult {
-  opened: boolean
-  openError?: string
-}
-
-const OPEN_REPORT_TIMEOUT_MS = 2000
-
-function openCommandForPlatform(url: string): BrowserOpenCommand {
-  if (process.platform === 'darwin') {
-    return { command: 'open', args: [url] }
-  }
-  if (process.platform === 'win32') {
-    return { command: 'cmd.exe', args: ['/c', 'start', '', url] }
-  }
-  return { command: 'xdg-open', args: [url] }
-}
-
-function openExportedReport(path: string): Promise<BrowserOpenResult> {
-  const { command, args } = openCommandForPlatform(pathToFileURL(path).href)
-
-  return new Promise((resolve) => {
-    let settled = false
-    let child: ReturnType<typeof spawn> | undefined
-    let timeout: ReturnType<typeof setTimeout> | undefined
-
-    const settle = (result: BrowserOpenResult) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-      resolve(result)
-    }
-
-    timeout = setTimeout(() => {
-      child?.unref()
-      settle({ opened: true })
-    }, OPEN_REPORT_TIMEOUT_MS)
-    timeout.unref()
-
-    try {
-      child = spawn(command, args, { stdio: 'ignore', windowsHide: true })
-    } catch (error) {
-      settle({
-        opened: false,
-        openError: error instanceof Error ? error.message : String(error),
-      })
-      return
-    }
-
-    child.once('error', (error) => {
-      settle({ opened: false, openError: `${command}: ${error.message}` })
-    })
-    child.once('close', (code, signal) => {
-      child?.unref()
-      if (code === 0) {
-        settle({ opened: true })
-        return
-      }
-      const reason = signal ? `terminated by ${signal}` : `exited with code ${code ?? 'unknown'}`
-      settle({ opened: false, openError: `${command} ${reason}` })
-    })
-  })
-}
-
-function safeSite(): string | undefined {
-  try {
-    return getDatadogClient().site
-  } catch {
-    return undefined
-  }
 }

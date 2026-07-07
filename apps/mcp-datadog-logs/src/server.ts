@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerAggregateLogsTool } from './tools/aggregate-logs.js'
 import { registerInvestigateAppTools } from './tools/investigate/app-tools.js'
+import { registerExportReportTool } from './tools/investigate/export-report-tool.js'
 import { registerInvestigateTool } from './tools/investigate/investigate-tool.js'
 import { registerInvestigatorResource } from './tools/investigate/resource.js'
 import { registerRunInvestigationTool } from './tools/investigate/run-investigation-tool.js'
@@ -18,6 +19,7 @@ export function createServer(): McpServer {
   registerSearchLogsTool(server)
   registerAggregateLogsTool(server)
   registerRunInvestigationTool(server)
+  registerExportReportTool(server)
   registerInvestigateTool(server)
   registerInvestigateAppTools(server)
 

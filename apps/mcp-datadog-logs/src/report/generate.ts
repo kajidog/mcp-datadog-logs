@@ -10,6 +10,8 @@ const KNOWN_STATUS_CLASSES = new Set(['error', 'warn', 'info', 'debug'])
 export interface ReportOptions {
   title?: string
   site?: string
+  /** IANA time zone for displayed timestamps; invalid values fall back to UTC */
+  timeZone?: string
 }
 
 /**
@@ -22,11 +24,12 @@ export function generateReport(
   options: ReportOptions = {}
 ): string {
   const title = options.title?.trim() || 'Datadog Logs Investigation'
-  const generatedAt = new Date().toISOString()
-  const range = `${formatMs(result.resolvedRange.fromMs)} → ${formatMs(result.resolvedRange.toMs)} (UTC)`
+  const { timeZone, format: formatTs } = timestampFormatter(options.timeZone ?? 'UTC')
+  const generatedAt = `${formatTs(Date.now())} (${timeZone})`
+  const range = `${formatTs(result.resolvedRange.fromMs)} → ${formatTs(result.resolvedRange.toMs)} (${timeZone})`
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-time-zone="${escapeHtml(timeZone)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -52,9 +55,9 @@ export function generateReport(
   </header>
   ${renderStatTiles(result)}
   ${renderFindingsSection(result.findings)}
-  ${renderTimelineSection(result)}
+  ${renderTimelineSection(result, timeZone)}
   ${renderFacetsSection(result.facets)}
-  ${renderLogsSection(result, rawById)}
+  ${renderLogsSection(result, rawById, formatTs)}
   <footer>Exported by @kajidog/mcp-datadog-logs · ${escapeHtml(result.rows.length.toString())} of ~${escapeHtml(result.totalCount.toString())} matching logs included</footer>
 </main>
 <script>${REPORT_JS}</script>
@@ -87,9 +90,9 @@ function renderFindingsSection(findings: string | undefined): string {
   </section>`
 }
 
-function renderTimelineSection(result: InvestigationResult): string {
+function renderTimelineSection(result: InvestigationResult, timeZone: string): string {
   const rangeMs = result.resolvedRange.toMs - result.resolvedRange.fromMs
-  const svg = renderTimelineSvg(result.timeline, { rangeMs, endMs: result.resolvedRange.toMs })
+  const svg = renderTimelineSvg(result.timeline, { rangeMs, endMs: result.resolvedRange.toMs, timeZone })
   const legend = stackStatuses(result.timeline)
     .reverse()
     .map(
@@ -129,8 +132,12 @@ function renderFacetsSection(facets: FacetBreakdown[]): string {
   return `<section><h2>Breakdowns</h2><div class="facets">${cards}</div></section>`
 }
 
-function renderLogsSection(result: InvestigationResult, rawById: Map<string, RawLog>): string {
-  const entries = result.rows.map((row) => renderLogEntry(row, rawById.get(row.id))).join('')
+function renderLogsSection(
+  result: InvestigationResult,
+  rawById: Map<string, RawLog>,
+  formatTs: (ms: number) => string
+): string {
+  const entries = result.rows.map((row) => renderLogEntry(row, rawById.get(row.id), formatTs)).join('')
   return `<section>
     <h2>Logs (${result.rows.length})</h2>
     <div class="log-toolbar">
@@ -143,7 +150,7 @@ function renderLogsSection(result: InvestigationResult, rawById: Map<string, Raw
   </section>`
 }
 
-function renderLogEntry(row: LogRow, raw: RawLog | undefined): string {
+function renderLogEntry(row: LogRow, raw: RawLog | undefined, formatTs: (ms: number) => string): string {
   const statusClass = KNOWN_STATUS_CLASSES.has(row.status) ? row.status : 'other'
   let detail = raw ? JSON.stringify(raw, null, 2) : JSON.stringify(row, null, 2)
   if (detail.length > MAX_RAW_JSON_CHARS) {
@@ -152,7 +159,7 @@ function renderLogEntry(row: LogRow, raw: RawLog | undefined): string {
   const tsMs = Date.parse(row.timestamp)
   return `<details data-status="${escapeHtml(row.status)}"${Number.isNaN(tsMs) ? '' : ` data-ts="${tsMs}"`}>
     <summary>
-      <span class="time">${escapeHtml(row.timestamp)}</span>
+      <span class="time">${escapeHtml(Number.isNaN(tsMs) ? row.timestamp : formatTs(tsMs))}</span>
       <span class="status-badge ${statusClass}">${escapeHtml(row.status)}</span>
       <span class="service">${escapeHtml(row.service ?? '-')}</span>
       <span class="message">${escapeHtml(row.message || '(no message)')}</span>
@@ -161,8 +168,33 @@ function renderLogEntry(row: LogRow, raw: RawLog | undefined): string {
   </details>`
 }
 
-function formatMs(ms: number): string {
-  return new Date(ms).toISOString().replace('T', ' ').replace(/\..+/, '')
+/** "YYYY-MM-DD HH:mm:ss" formatter in the given zone; invalid zones fall back to UTC. */
+function timestampFormatter(timeZone: string): { timeZone: string; format: (ms: number) => string } {
+  try {
+    return { timeZone, format: buildTimestampFormat(timeZone) }
+  } catch {
+    return { timeZone: 'UTC', format: buildTimestampFormat('UTC') }
+  }
+}
+
+function buildTimestampFormat(timeZone: string): (ms: number) => string {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  return (ms) => {
+    const byType: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {}
+    for (const part of fmt.formatToParts(new Date(ms))) {
+      byType[part.type] = part.value
+    }
+    return `${byType.year}-${byType.month}-${byType.day} ${byType.hour}:${byType.minute}:${byType.second}`
+  }
 }
 
 function formatCount(n: number): string {

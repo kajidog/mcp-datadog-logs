@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { VIEW_UUID_PATTERN } from '@kajidog/investigation-shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runInvestigation } from '../../datadog/investigation.js'
@@ -11,6 +14,12 @@ vi.mock('../../datadog/client.js', async (importOriginal) => ({
 }))
 vi.mock('../../datadog/investigation.js', () => ({
   runInvestigation: vi.fn(),
+}))
+// Exporting a report tries to open a browser — never spawn one from tests.
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(() => {
+    throw new Error('spawn disabled in tests')
+  }),
 }))
 
 const runInvestigationMock = vi.mocked(runInvestigation)
@@ -41,6 +50,7 @@ function resultText(res: { content: Array<{ type: string; text?: string }> }): s
 beforeEach(() => {
   clearSessions()
   runInvestigationMock.mockReset()
+  vi.unstubAllEnvs()
 })
 
 describe('datadog_investigate_logs with viewUUID', () => {
@@ -94,5 +104,34 @@ describe('datadog_run_investigation', () => {
     const res = await call({ query: '*', from: 'now-1h', to: 'now', sampleRows: 3, cursor: 'page-2' })
     expect(res.isError).toBe(true)
     expect(runInvestigationMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('datadog_export_report', () => {
+  it('writes an HTML report for a stored session and returns the saved path', async () => {
+    seedSession('root cause note')
+    const dir = mkdtempSync(join(tmpdir(), 'dd-report-'))
+    vi.stubEnv('MCP_DATADOG_EXPORT_DIR', dir)
+    vi.stubEnv('MCP_DATADOG_TIMEZONE', 'Asia/Tokyo')
+
+    const call = getHandler('datadog_export_report')
+    const res = await call({ viewUUID: VIEW_UUID })
+
+    expect(res.isError).toBeUndefined()
+    const text = resultText(res)
+    const path = text.match(/Report saved to (\S+\.html)/)?.[1]
+    expect(path).toBeDefined()
+    expect(path).toContain(dir)
+    const html = readFileSync(path as string, 'utf-8')
+    expect(html).toContain('root cause note')
+    expect(html).toContain('data-time-zone="Asia/Tokyo"')
+    expect(runInvestigationMock).not.toHaveBeenCalled()
+  })
+
+  it('returns isError for a missing/expired session', async () => {
+    const call = getHandler('datadog_export_report')
+    const res = await call({ viewUUID: VIEW_UUID })
+    expect(res.isError).toBe(true)
+    expect(resultText(res)).toContain('not found')
   })
 })

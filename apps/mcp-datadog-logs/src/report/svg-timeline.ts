@@ -27,6 +27,8 @@ interface TimelineSvgOptions {
   rangeMs?: number
   /** Absolute end of the investigated range (epoch ms) — caps the last bucket. */
   endMs?: number
+  /** IANA time zone for axis labels and tooltips; invalid values fall back to UTC. */
+  timeZone?: string
 }
 
 /**
@@ -81,6 +83,7 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
 
   const labelEvery = Math.max(1, Math.ceil(n / 8))
   const useDateLabel = (options.rangeMs ?? 0) > 86_400_000
+  const formatTime = bucketLabelFormatter(options.timeZone ?? 'UTC', useDateLabel)
   const bucketRanges = resolveBucketRanges(timeline, options)
 
   timeline.forEach((bucket, i) => {
@@ -88,7 +91,7 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
     const range = bucketRanges[i]
     const rangeAttrs = range ? ` data-from="${range.fromMs}" data-to="${range.toMs}"` : ''
     parts.push(
-      `<g class="bucket"${rangeAttrs} tabindex="0" role="button" aria-label="Filter logs to ${escapeXml(formatTime(bucket.time, useDateLabel))}">`
+      `<g class="bucket"${rangeAttrs} tabindex="0" role="button" aria-label="Filter logs to ${escapeXml(formatTime(bucket.time))}">`
     )
     parts.push(
       `<rect class="hit" x="${x.toFixed(1)}" y="${pad.top}" width="${barW.toFixed(1)}" height="${plotH.toFixed(1)}" fill="transparent"/>`
@@ -103,13 +106,13 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
       yCursor -= h
       const drawH = Math.max(h - 1, 0.5)
       parts.push(
-        `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${drawH.toFixed(1)}" fill="${statusColor(status)}" rx="1"><title>${escapeXml(formatTime(bucket.time, useDateLabel))} ${status}: ${count}</title></rect>`
+        `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${drawH.toFixed(1)}" fill="${statusColor(status)}" rx="1"><title>${escapeXml(formatTime(bucket.time))} ${status}: ${count}</title></rect>`
       )
     }
     parts.push('</g>')
     if (i % labelEvery === 0) {
       parts.push(
-        `<text x="${(x + barW / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--text-muted)" font-size="11">${escapeXml(formatTime(bucket.time, useDateLabel))}</text>`
+        `<text x="${(x + barW / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--text-muted)" font-size="11">${escapeXml(formatTime(bucket.time))}</text>`
       )
     }
   })
@@ -146,19 +149,36 @@ function resolveBucketRanges(
   })
 }
 
-function formatTime(iso: string, withDate: boolean): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
+function bucketLabelFormatter(timeZone: string, withDate: boolean): (iso: string) => string {
+  let fmt: Intl.DateTimeFormat
+  try {
+    fmt = buildBucketLabelFormat(timeZone)
+  } catch {
+    fmt = buildBucketLabelFormat('UTC')
   }
-  const hh = String(date.getUTCHours()).padStart(2, '0')
-  const mm = String(date.getUTCMinutes()).padStart(2, '0')
-  if (withDate) {
-    const mo = String(date.getUTCMonth() + 1).padStart(2, '0')
-    const dd = String(date.getUTCDate()).padStart(2, '0')
-    return `${mo}/${dd} ${hh}:${mm}`
+  return (iso) => {
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) {
+      return iso
+    }
+    const byType: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = {}
+    for (const part of fmt.formatToParts(date)) {
+      byType[part.type] = part.value
+    }
+    const time = `${byType.hour}:${byType.minute}`
+    return withDate ? `${byType.month}/${byType.day} ${time}` : time
   }
-  return `${hh}:${mm}`
+}
+
+function buildBucketLabelFormat(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
 }
 
 function escapeXml(text: string): string {

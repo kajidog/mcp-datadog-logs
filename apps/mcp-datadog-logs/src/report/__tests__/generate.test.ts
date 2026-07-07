@@ -100,6 +100,29 @@ describe('generateReport', () => {
     const html = generateReport(fixtureResult(), new Map())
     expect(html).toContain('class="item" data-status="error"')
   })
+
+  it('renders timestamps in UTC by default', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    expect(html).toContain('data-time-zone="UTC"')
+    expect(html).toContain('2026-07-06 09:10:00 → 2026-07-06 10:10:00 (UTC)')
+    expect(html).toContain('<span class="time">2026-07-06 10:01:00</span>')
+  })
+
+  it('renders timestamps in the configured time zone', () => {
+    const html = generateReport(fixtureResult(), new Map(), { timeZone: 'Asia/Tokyo' })
+    expect(html).toContain('data-time-zone="Asia/Tokyo"')
+    // 09:10/10:10 UTC → 18:10/19:10 JST
+    expect(html).toContain('2026-07-06 18:10:00 → 2026-07-06 19:10:00 (Asia/Tokyo)')
+    expect(html).toContain('<span class="time">2026-07-06 19:01:00</span>')
+    // filtering epoch attributes stay timezone-independent
+    expect(html).toContain(`data-ts="${Date.parse('2026-07-06T10:01:00.000Z')}"`)
+  })
+
+  it('falls back to UTC for an invalid time zone', () => {
+    const html = generateReport(fixtureResult(), new Map(), { timeZone: 'Not/AZone' })
+    expect(html).toContain('data-time-zone="UTC"')
+    expect(html).toContain('(UTC)')
+  })
 })
 
 describe('renderTimelineSvg', () => {
@@ -131,6 +154,14 @@ describe('renderTimelineSvg', () => {
 
   it('renders a no-data message for an empty timeline', () => {
     expect(renderTimelineSvg([])).toContain('No data in range')
+  })
+
+  it('renders axis labels in the configured time zone (UTC by default)', () => {
+    const timeline = fixtureResult().timeline
+    expect(renderTimelineSvg(timeline)).toContain('>10:00</text>')
+    // 10:00 UTC → 19:00 JST
+    expect(renderTimelineSvg(timeline, { timeZone: 'Asia/Tokyo' })).toContain('>19:00</text>')
+    expect(renderTimelineSvg(timeline, { timeZone: 'Not/AZone' })).toContain('>10:00</text>')
   })
 })
 

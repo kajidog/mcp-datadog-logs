@@ -12,6 +12,8 @@ export interface DatadogConfig {
 export interface ServerConfig {
   exportDir: string
   maxRows: number
+  /** IANA time zone used for timestamps in exported HTML reports */
+  timeZone: string
 }
 
 export const HARD_MAX_ROWS = 500
@@ -47,6 +49,22 @@ export function getServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCon
   return {
     exportDir: resolveExportDir(env),
     maxRows,
+    timeZone: resolveTimeZone(env),
+  }
+}
+
+function resolveTimeZone(env: NodeJS.ProcessEnv): string {
+  const fromEnv = env.MCP_DATADOG_TIMEZONE?.trim()
+  if (!fromEnv) {
+    return 'UTC'
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: fromEnv })
+    return fromEnv
+  } catch {
+    // stdout is the MCP channel — warnings go to stderr.
+    console.error(`mcp-datadog-logs: invalid MCP_DATADOG_TIMEZONE "${fromEnv}", falling back to UTC`)
+    return 'UTC'
   }
 }
 
