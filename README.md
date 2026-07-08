@@ -1,4 +1,4 @@
-# fstsfog-mcp-apps
+# mcp-datadog-logs
 
 Datadog と MCP Apps 周辺のサンプル/ツールをまとめた monorepo です。
 
