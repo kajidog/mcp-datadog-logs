@@ -14,16 +14,22 @@ needed).
   - full result (log rows, timeline, facets) stored server-side under a `viewUUID`
   - the model receives only a compact summary — iterate without bloating context
   - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
-    plain-text `findings` shown in the UI and the HTML report
-- 📄 `datadog_export_report` — export the HTML report directly from the model:
-  - pass a `viewUUID` to write the self-contained report to disk without opening the UI
+    Markdown `findings` rendered in the UI and the HTML report
+- 📄 `datadog_export_report` — export directly from the model:
+  - pass a `viewUUID` to write the self-contained HTML report to disk without opening the UI
+  - `format: 'csv' | 'json'` writes the fetched log rows as data instead
+- 🧩 automatic message pattern analysis — fetched rows are clustered into
+  templates (`Payment failed for order <*>`), surfaced in tool summaries, the UI
+  and HTML reports
 - 🖥️ `datadog_investigate_logs` — opens the interactive investigation UI:
   - stacked timeline chart of log volume by status
   - facet sidebar (service / status / host / custom `groupBy`) — click to filter
-  - log table with expandable full-JSON detail and load-more pagination
+  - message pattern panel — fetched rows clustered into templates, click to filter
+  - log table with expandable full-JSON detail, keyword highlighting and load-more pagination
   - adjust query & time range and re-run right from the UI
-  - **Export** button → self-contained HTML report written to disk
-- stdio transport only, zero server-side state persistence
+  - **Export** button → self-contained HTML report, plus CSV/JSON export of the filtered rows
+- stdio transport; investigation sessions are cached in memory and mirrored to
+  a local cache directory so a `viewUUID` survives server restarts
 
 ## Setup
 
@@ -80,9 +86,11 @@ were created. Japan is `ap1.datadoghq.com`; US1 is `datadoghq.com`.
 | `DD_APP_KEY` | ✅ | — | Datadog application key from the same org/site as `DD_API_KEY` (`logs_read_data` scope) |
 | `DD_SITE` | | `datadoghq.com` | Datadog site, e.g. `ap1.datadoghq.com`, `datadoghq.eu`, `us5.datadoghq.com` |
 | `DD_LOGS_INDEXES` | | all | Comma-separated log indexes to search |
-| `MCP_DATADOG_EXPORT_DIR` | | `~/Downloads` (or cwd) | Where exported HTML reports are written |
+| `MCP_DATADOG_EXPORT_DIR` | | `~/Downloads` (or cwd) | Where exported reports / data files are written |
 | `MCP_DATADOG_MAX_ROWS` | | `200` | Max log rows per investigation (hard cap 500) |
 | `MCP_DATADOG_TIMEZONE` | | `UTC` | IANA time zone (e.g. `Asia/Tokyo`) for timestamps in exported HTML reports; invalid values fall back to UTC |
+| `MCP_DATADOG_SESSION_DIR` | | `~/.cache/mcp-datadog-logs/sessions` | Where investigation sessions are persisted across restarts (pruned beyond 50 files / 7 days) |
+| `MCP_DATADOG_PERSIST_SESSIONS` | | `true` | Set `false` to keep sessions in memory only |
 
 Required Datadog permissions are documented in
 [`docs/datadog-permissions.md`](../../docs/datadog-permissions.md).
@@ -92,11 +100,15 @@ Required Datadog permissions are documented in
 | Tool | Audience | Description |
 |---|---|---|
 | `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor |
-| `datadog_aggregate_logs` | model | Count by facet (`groupBy`) or timeseries (`interval`) |
+| `datadog_aggregate_logs` | model | Count by facet (`groupBy`), or as a timeseries when `interval` is set (per-facet counts per bucket) |
 | `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
-| `datadog_export_report` | model | Write the self-contained HTML report for a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` — no UI needed |
+| `datadog_export_report` | model | Write a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` as a self-contained HTML report, or as CSV/JSON of the fetched rows (`format`) — no UI needed |
 | `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |
 | `_get_view_state` / `_run_investigation` / `_get_log_detail` / `_export_report` | UI only | Internal bridge tools called by the app (hidden from the model) |
+
+`from`/`to` accept Datadog time math (`now-4h`, `now`) or ISO 8601. Absolute
+timestamps must include an explicit time zone (`Z` or an offset like `+09:00`);
+values without one (e.g. `2026-07-12T10:00:00`) are rejected as ambiguous.
 
 ## Exported reports
 

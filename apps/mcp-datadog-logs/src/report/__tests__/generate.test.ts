@@ -53,18 +53,45 @@ describe('generateReport', () => {
     expect(html).toContain('<details data-status=')
   })
 
-  it('renders escaped AI findings when present', () => {
+  it('renders AI findings as safe GFM Markdown', () => {
     const html = generateReport(
-      { ...fixtureResult(), findings: 'Root cause: <script>alert(1)</script>\nline2' },
+      {
+        ...fixtureResult(),
+        findings:
+          '## Root cause\n\n- **Database timeout**\n- Retry exhausted\n\n| service | count |\n| --- | ---: |\n| api | 12 |\n\n[Runbook](https://example.com/runbook)\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))',
+      },
       new Map()
     )
     expect(html).toContain('AI Findings')
+    expect(html).toContain('<h2>Root cause</h2>')
+    expect(html).toContain('<strong>Database timeout</strong>')
+    expect(html).toContain('<table>')
+    expect(html).toContain('href="https://example.com/runbook" target="_blank" rel="noreferrer noopener"')
     expect(html).not.toContain('<script>alert(1)')
-    expect(html).toContain('Root cause: &lt;script&gt;alert(1)&lt;/script&gt;\nline2')
+    expect(html).toContain('&#x3C;script>alert(1)&#x3C;/script>')
+    expect(html).not.toContain('href="javascript:')
   })
 
   it('omits the findings section when findings are absent', () => {
     expect(generateReport(fixtureResult(), new Map())).not.toContain('AI Findings')
+  })
+
+  it('renders escaped message patterns and omits the section when absent', () => {
+    const withPatterns = generateReport(
+      {
+        ...fixtureResult(),
+        patterns: [
+          { template: '<script>boom</script> took <*>', count: 3, ratio: 0.75, example: 'boom took 3s', rowIds: [] },
+        ],
+      },
+      new Map()
+    )
+    expect(withPatterns).toContain('Message patterns')
+    expect(withPatterns).toContain('&lt;script&gt;boom&lt;/script&gt; took &lt;*&gt;')
+    expect(withPatterns).not.toContain('<script>boom')
+    expect(withPatterns).toContain('75%')
+
+    expect(generateReport(fixtureResult(), new Map())).not.toContain('Message patterns')
   })
 
   it('includes raw detail JSON when available, truncated when huge', () => {
@@ -111,6 +138,7 @@ describe('generateReport', () => {
   it('renders timestamps in the configured time zone', () => {
     const html = generateReport(fixtureResult(), new Map(), { timeZone: 'Asia/Tokyo' })
     expect(html).toContain('data-time-zone="Asia/Tokyo"')
+    expect(html).toContain('timestamps in Asia/Tokyo')
     // 09:10/10:10 UTC → 18:10/19:10 JST
     expect(html).toContain('2026-07-06 18:10:00 → 2026-07-06 19:10:00 (Asia/Tokyo)')
     expect(html).toContain('<span class="time">2026-07-06 19:01:00</span>')

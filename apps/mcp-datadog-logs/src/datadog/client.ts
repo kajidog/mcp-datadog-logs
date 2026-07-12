@@ -73,16 +73,23 @@ export class DatadogLogsClient {
     }
   }
 
-  /** Timeseries log counts grouped by status — powers the timeline chart. */
-  async aggregateTimeseriesByStatus(params: AggregateParams & { interval: string }): Promise<RawAggregateBucket[]> {
+  /** Timeseries log counts grouped by a single facet. */
+  async aggregateTimeseriesByFacet(
+    params: AggregateParams & { interval: string; facet: string; limit?: number }
+  ): Promise<RawAggregateBucket[]> {
     const response = await this.api.aggregateLogs({
       body: {
         compute: [{ aggregation: 'count', type: 'timeseries', interval: params.interval }],
         filter: this.filter(params),
-        groupBy: [{ facet: 'status', limit: 10 }],
+        groupBy: [{ facet: params.facet, limit: params.limit ?? 50 }],
       },
     })
     return (response.data?.buckets ?? []) as RawAggregateBucket[]
+  }
+
+  /** Status-grouped timeline used by the investigation UI. */
+  async aggregateTimeseriesByStatus(params: AggregateParams & { interval: string }): Promise<RawAggregateBucket[]> {
+    return this.aggregateTimeseriesByFacet({ ...params, facet: 'status', limit: 10 })
   }
 
   /** Total log counts grouped by a single facet (e.g. service, host, @http.status_code). */

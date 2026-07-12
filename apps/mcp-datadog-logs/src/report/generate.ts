@@ -1,5 +1,6 @@
-import type { FacetBreakdown, InvestigationResult, LogRow } from '@kajidog/investigation-shared'
+import type { FacetBreakdown, InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
 import type { RawLog } from '../datadog/normalize.js'
+import { renderMarkdown } from './markdown.js'
 import { REPORT_JS } from './script.js'
 import { REPORT_CSS } from './styles.js'
 import { renderTimelineSvg, stackStatuses, statusColor } from './svg-timeline.js'
@@ -57,7 +58,8 @@ export function generateReport(
   ${renderFindingsSection(result.findings)}
   ${renderTimelineSection(result, timeZone)}
   ${renderFacetsSection(result.facets)}
-  ${renderLogsSection(result, rawById, formatTs)}
+  ${renderPatternsSection(result.patterns, result.rows.length)}
+  ${renderLogsSection(result, rawById, formatTs, timeZone)}
   <footer>Exported by @kajidog/mcp-datadog-logs · ${escapeHtml(result.rows.length.toString())} of ~${escapeHtml(result.totalCount.toString())} matching logs included</footer>
 </main>
 <script>${REPORT_JS}</script>
@@ -86,7 +88,7 @@ function renderFindingsSection(findings: string | undefined): string {
   }
   return `<section>
     <h2>AI Findings</h2>
-    <div class="card"><p class="findings">${escapeHtml(findings)}</p></div>
+    <div class="card findings">${renderMarkdown(findings)}</div>
   </section>`
 }
 
@@ -132,14 +134,34 @@ function renderFacetsSection(facets: FacetBreakdown[]): string {
   return `<section><h2>Breakdowns</h2><div class="facets">${cards}</div></section>`
 }
 
+function renderPatternsSection(patterns: LogPattern[] | undefined, analyzedRows: number): string {
+  if (!patterns || patterns.length === 0) {
+    return ''
+  }
+  const rows = patterns
+    .map(
+      (pattern) =>
+        `<tr><td class="num">${formatCount(pattern.count)}</td><td class="num">${Math.round(pattern.ratio * 100)}%</td><td><code>${escapeHtml(pattern.template)}</code></td></tr>`
+    )
+    .join('')
+  return `<section>
+    <h2>Message patterns (from ${formatCount(analyzedRows)} fetched rows)</h2>
+    <div class="card">
+      <table><thead><tr><th style="text-align:right">Count</th><th style="text-align:right">%</th><th>Template</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+  </section>`
+}
+
 function renderLogsSection(
   result: InvestigationResult,
   rawById: Map<string, RawLog>,
-  formatTs: (ms: number) => string
+  formatTs: (ms: number) => string,
+  timeZone: string
 ): string {
   const entries = result.rows.map((row) => renderLogEntry(row, rawById.get(row.id), formatTs)).join('')
   return `<section>
-    <h2>Logs (${result.rows.length})</h2>
+    <h2>Logs (${result.rows.length}) <small>— timestamps in ${escapeHtml(timeZone)}</small></h2>
     <div class="log-toolbar">
       <input id="log-search" type="search" placeholder="Filter logs by text…" aria-label="Filter logs by text">
       <span id="active-filters"></span>

@@ -23,7 +23,7 @@ export function registerInvestigateAppTools(server: McpServer): void {
       title: 'Get Investigation State (App)',
       description: 'Fetch the stored investigation result for a viewUUID. Only callable from the app UI.',
       inputSchema: {
-        viewUUID: z.string().describe('Investigation view ID from the tool result text'),
+        viewUUID: z.uuid().describe('Investigation view ID from the tool result text'),
       },
       _meta: appOnlyMeta,
     },
@@ -46,7 +46,7 @@ export function registerInvestigateAppTools(server: McpServer): void {
       description:
         'Re-run the investigation with adjusted parameters and update the stored view state. Only callable from the app UI.',
       inputSchema: {
-        viewUUID: z.string().describe('Investigation view ID to update'),
+        viewUUID: z.uuid().describe('Investigation view ID to update'),
         query: z.string().describe('Datadog logs search query'),
         from: z.string().describe('Start time (Datadog time math or ISO 8601)'),
         to: z.string().describe('End time'),
@@ -93,7 +93,7 @@ export function registerInvestigateAppTools(server: McpServer): void {
       title: 'Get Log Detail (App)',
       description: 'Fetch the full raw log event for a row in the investigation table. Only callable from the app UI.',
       inputSchema: {
-        viewUUID: z.string().describe('Investigation view ID'),
+        viewUUID: z.uuid().describe('Investigation view ID'),
         logId: z.string().describe('Log row ID'),
       },
       _meta: appOnlyMeta,
@@ -117,16 +117,32 @@ export function registerInvestigateAppTools(server: McpServer): void {
     {
       title: 'Export Investigation Report (App)',
       description:
-        'Generate a self-contained HTML report for the investigation and write it to the export directory. Only callable from the app UI.',
+        'Export the investigation to the export directory as an HTML report (default) or CSV/JSON of the fetched rows. Only callable from the app UI.',
       inputSchema: {
-        viewUUID: z.string().describe('Investigation view ID'),
+        viewUUID: z.uuid().describe('Investigation view ID'),
         title: z.string().optional().describe('Report title override'),
+        format: z.enum(['html', 'csv', 'json']).optional().describe('Output format (default "html")'),
+        rowIds: z
+          .array(z.string())
+          .max(HARD_MAX_ROWS)
+          .optional()
+          .describe('csv/json only: export just these stored rows (e.g. the filtered view)'),
       },
       _meta: appOnlyMeta,
     },
-    async ({ viewUUID, title }: { viewUUID: string; title?: string }): Promise<CallToolResult> => {
+    async ({
+      viewUUID,
+      title,
+      format,
+      rowIds,
+    }: {
+      viewUUID: string
+      title?: string
+      format?: 'html' | 'csv' | 'json'
+      rowIds?: string[]
+    }): Promise<CallToolResult> => {
       try {
-        return jsonResult(await exportInvestigationReport({ viewUUID, title }))
+        return jsonResult(await exportInvestigationReport({ viewUUID, title, format, rowIds }))
       } catch (error) {
         return createErrorResponse(error)
       }

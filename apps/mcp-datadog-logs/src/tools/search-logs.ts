@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
 import { getDatadogClient } from '../datadog/client.js'
 import { normalizeLogRow } from '../datadog/normalize.js'
+import { resolveRange } from '../datadog/time.js'
 import { registerPrefixedTool } from './registration.js'
 import { createErrorResponse, textResult } from './utils.js'
 
@@ -17,8 +18,14 @@ export function registerSearchLogsTool(server: McpServer): void {
         'Use for quick model-side inspection. For a visual, user-facing investigation use datadog_investigate_logs instead.',
       inputSchema: {
         query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
-        from: z.string().default('now-15m').describe('Start time: Datadog time math ("now-4h") or ISO 8601'),
-        to: z.string().default('now').describe('End time: Datadog time math ("now") or ISO 8601'),
+        from: z
+          .string()
+          .default('now-15m')
+          .describe('Start time: Datadog time math ("now-4h") or ISO 8601 with a time zone (Z or offset)'),
+        to: z
+          .string()
+          .default('now')
+          .describe('End time: Datadog time math ("now") or ISO 8601 with a time zone (Z or offset)'),
         limit: z.number().int().min(1).max(100).default(20).describe('Max log entries to return'),
         sort: z.enum(['timestamp', '-timestamp']).default('-timestamp').describe('Sort order by timestamp'),
         cursor: z.string().optional().describe('Pagination cursor from a previous result'),
@@ -44,6 +51,7 @@ export function registerSearchLogsTool(server: McpServer): void {
       cursor?: string
     }): Promise<CallToolResult> => {
       try {
+        resolveRange(from, to)
         const client = getDatadogClient()
         const { logs, nextCursor } = await client.searchLogs({ query, from, to, limit, sort, cursor })
         if (logs.length === 0) {

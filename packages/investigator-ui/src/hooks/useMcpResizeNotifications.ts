@@ -1,6 +1,6 @@
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useAutoResize } from '@modelcontextprotocol/ext-apps/react'
-import { useEffect, useRef } from 'react'
+import { type RefObject, useEffect, useRef } from 'react'
 
 function measureContentSize() {
   const root = document.getElementById('root')
@@ -14,14 +14,18 @@ function measureContentSize() {
   }
 }
 
-function scheduleSizeNotification(app: App) {
+function scheduleSizeNotification(app: App, lastSentRef: RefObject<string>) {
   const rafIds: number[] = []
   let cancelled = false
 
   const notify = () => {
     if (cancelled) return
     const size = measureContentSize()
-    if (size && size.height > 0) void app.sendSizeChanged(size)
+    if (!size || size.height <= 0) return
+    const key = `${size.width}x${size.height}`
+    if (key === lastSentRef.current) return
+    lastSentRef.current = key
+    void app.sendSizeChanged(size)
   }
 
   const scheduleAfterFrames = (frames: number) => {
@@ -44,6 +48,7 @@ function scheduleSizeNotification(app: App) {
 }
 
 export function useMcpResizeNotifications(app: App | null, trigger: string) {
+  const lastSentRef = useRef('')
   const triggerRef = useRef(trigger)
 
   useAutoResize(app)
@@ -51,7 +56,7 @@ export function useMcpResizeNotifications(app: App | null, trigger: string) {
   useEffect(() => {
     triggerRef.current = trigger
     if (!app) return
-    return scheduleSizeNotification(app)
+    return scheduleSizeNotification(app, lastSentRef)
   }, [app, trigger])
 
   useEffect(() => {
@@ -60,14 +65,22 @@ export function useMcpResizeNotifications(app: App | null, trigger: string) {
     let cleanup: (() => void) | undefined
     const schedule = () => {
       cleanup?.()
-      cleanup = scheduleSizeNotification(app)
+      cleanup = scheduleSizeNotification(app, lastSentRef)
     }
+
+    // Hosts may pin body/html height, which silences the library's auto-resize
+    // observer — watch #root directly so height changes driven by state local to
+    // child components (row expand/collapse, collapsibles) are still reported.
+    const root = document.getElementById('root')
+    const observer = root ? new ResizeObserver(schedule) : null
+    if (root && observer) observer.observe(root)
 
     window.addEventListener('resize', schedule)
     schedule()
 
     return () => {
       cleanup?.()
+      observer?.disconnect()
       window.removeEventListener('resize', schedule)
     }
   }, [app])

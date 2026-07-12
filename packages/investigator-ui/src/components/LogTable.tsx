@@ -4,6 +4,7 @@ import { Fragment, type MouseEvent, type ReactNode, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { highlightText } from '@/lib/highlight'
 import { cn } from '@/lib/utils'
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -24,9 +25,19 @@ interface LogTableProps {
   fetchDetail: (logId: string) => Promise<unknown | null>
   /** Message shown when rows is empty (e.g. differs when a local filter is active) */
   emptyMessage?: string
+  /** Keyword-filter terms to emphasize inside the message column */
+  highlightTerms?: string[]
 }
 
-export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, emptyMessage }: LogTableProps) {
+export function LogTable({
+  rows,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  fetchDetail,
+  emptyMessage,
+  highlightTerms,
+}: LogTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, unknown>>({})
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -116,7 +127,7 @@ export function LogTable({ rows, hasMore, loadingMore, onLoadMore, fetchDetail, 
                     {row.service ?? '-'}
                   </TableCell>
                   <TableCell className="truncate py-1.5 text-xs" title={row.message}>
-                    {row.message || '(メッセージなし)'}
+                    {row.message ? highlightText(row.message, highlightTerms ?? []) : '(メッセージなし)'}
                   </TableCell>
                 </TableRow>
                 {expandedId === row.id && (

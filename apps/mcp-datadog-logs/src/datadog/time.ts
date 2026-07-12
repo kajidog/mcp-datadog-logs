@@ -31,11 +31,24 @@ export function parseTimeInput(input: string, nowMs: number = Date.now()): numbe
   if (/^\d{10}$/.test(trimmed)) {
     return Number.parseInt(trimmed, 10) * 1_000
   }
+  if (looksLikeIsoDate(trimmed) && !hasExplicitTimeZone(trimmed)) {
+    throw new Error(
+      `Ambiguous time value: "${input}". Absolute timestamps must include a time zone (for example "Z" or "+09:00").`
+    )
+  }
   const parsed = Date.parse(trimmed)
   if (!Number.isNaN(parsed)) {
     return parsed
   }
   throw new Error(`Unrecognized time value: "${input}". Use Datadog time math ("now-4h") or ISO 8601.`)
+}
+
+function looksLikeIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(?:T|$)/i.test(value)
+}
+
+function hasExplicitTimeZone(value: string): boolean {
+  return /T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
 }
 
 export interface ResolvedRange {
