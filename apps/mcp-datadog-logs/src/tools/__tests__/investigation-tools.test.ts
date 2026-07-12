@@ -108,6 +108,35 @@ describe('datadog_run_investigation', () => {
     expect(res.isError).toBe(true)
     expect(runInvestigationMock).not.toHaveBeenCalled()
   })
+
+  it('does not inject the new-investigation defaults into a cursor continuation', async () => {
+    const storedResult = fixtureResult({
+      params: { query: 'service:payments status:error', from: 'now-7d', to: 'now' },
+    })
+    setSession(VIEW_UUID, {
+      result: storedResult,
+      rawById: fixtureRawById(storedResult),
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const result = fixtureResult({
+      params: { query: 'service:payments status:error', from: 'now-7d', to: 'now', cursor: 'page-2' },
+    })
+    runInvestigationMock.mockResolvedValueOnce({ result, rawById: fixtureRawById(result) })
+
+    const call = getHandler('datadog_run_investigation')
+    await call({ viewUUID: VIEW_UUID, cursor: 'page-2' })
+
+    expect(runInvestigationMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: 'service:payments status:error',
+        from: '2026-07-06T09:10:00.000Z',
+        to: '2026-07-06T10:10:00.000Z',
+        cursor: 'page-2',
+      })
+    )
+  })
 })
 
 describe('datadog_export_report', () => {

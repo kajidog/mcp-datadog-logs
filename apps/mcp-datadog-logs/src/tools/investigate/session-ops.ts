@@ -8,7 +8,7 @@ import { getSession, type InvestigationSession, setSession } from './runtime.js'
 export interface StoreRunOptions {
   /** Update this session when present and found; otherwise create/recreate one under this ID */
   viewUUID?: string
-  params: InvestigationParams
+  params: Partial<InvestigationParams>
   /** Replaces stored findings when provided; existing findings are preserved otherwise */
   findings?: string
 }
@@ -27,8 +27,22 @@ export interface StoredRun {
 export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<StoredRun> {
   const client = getDatadogClient()
   const existing = opts.viewUUID ? getSession(opts.viewUUID) : undefined
+  const loadMoreParams = opts.params.cursor && existing ? existing.result.params : undefined
+  const loadMoreRange = opts.params.cursor && existing ? existing.result.resolvedRange : undefined
   const title = opts.params.title ?? existing?.title
-  const { result, rawById } = await runInvestigation(client, { ...opts.params, title })
+  const params: InvestigationParams = {
+    query: opts.params.query ?? loadMoreParams?.query ?? '*',
+    // Freeze relative ranges (for example now-1h -> now) to the exact window
+    // resolved by the first request. Reusing the relative strings here would
+    // shift the search and aggregate window every time another page is loaded.
+    from: opts.params.from ?? (loadMoreRange ? new Date(loadMoreRange.fromMs).toISOString() : 'now-1h'),
+    to: opts.params.to ?? (loadMoreRange ? new Date(loadMoreRange.toMs).toISOString() : 'now'),
+    groupBy: opts.params.groupBy ?? loadMoreParams?.groupBy,
+    limit: opts.params.limit ?? loadMoreParams?.limit,
+    cursor: opts.params.cursor,
+    title,
+  }
+  const { result, rawById } = await runInvestigation(client, params)
 
   if (opts.params.cursor && existing) {
     const seen = new Set(existing.result.rows.map((r) => r.id))

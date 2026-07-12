@@ -78,6 +78,36 @@ describe('runAndStoreInvestigation', () => {
     expect([...second.session.rawById.keys()].sort()).toEqual(['log-1', 'log-2', 'log-3', 'log-4', 'log-5'])
   })
 
+  it('inherits stored parameters and freezes the resolved range for a cursor continuation', async () => {
+    mockRun({
+      params: { query: 'service:checkout', from: 'now-7d', to: 'now', groupBy: '@env', limit: 50 },
+    })
+    const first = await runAndStoreInvestigation({
+      params: { query: 'service:checkout', from: 'now-7d', to: 'now', groupBy: '@env', limit: 50 },
+    })
+
+    mockRun({
+      params: { query: 'service:checkout', from: 'now-7d', to: 'now', groupBy: '@env', limit: 50 },
+      rows: [fixtureRow('log-5')],
+    })
+    await runAndStoreInvestigation({
+      viewUUID: first.viewUUID,
+      params: { cursor: 'page-2' },
+    })
+
+    expect(runInvestigationMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: 'service:checkout',
+        from: '2026-07-06T09:10:00.000Z',
+        to: '2026-07-06T10:10:00.000Z',
+        groupBy: '@env',
+        limit: 50,
+        cursor: 'page-2',
+      })
+    )
+  })
+
   it('extracts message patterns over all rows, recomputing after a cursor merge', async () => {
     mockRun()
     const first = await runAndStoreInvestigation({ params: { query: '*', from: 'now-1h', to: 'now' } })

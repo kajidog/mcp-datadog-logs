@@ -20,9 +20,15 @@ export function registerRunInvestigationTool(server: McpServer): void {
         'then call datadog_investigate_logs with the viewUUID to display the session to the user. ' +
         'Sessions are cached in memory and mirrored to disk, so a viewUUID usually survives server restarts.',
       inputSchema: {
-        query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
-        from: z.string().default('now-1h').describe('Start time: Datadog time math ("now-4h") or ISO 8601'),
-        to: z.string().default('now').describe('End time'),
+        query: z
+          .string()
+          .optional()
+          .describe('Datadog logs search query (default: "*"; inherited when continuing with viewUUID + cursor)'),
+        from: z
+          .string()
+          .optional()
+          .describe('Start time: Datadog time math or ISO 8601 (default: "now-1h"; inherited for cursor continuation)'),
+        to: z.string().optional().describe('End time (default: "now"; inherited for cursor continuation)'),
         groupBy: z.string().optional().describe('Extra facet to break down by, e.g. "@http.status_code"'),
         limit: z
           .number()
@@ -72,9 +78,9 @@ export function registerRunInvestigationTool(server: McpServer): void {
       findings,
       title,
     }: {
-      query: string
-      from: string
-      to: string
+      query?: string
+      from?: string
+      to?: string
       groupBy?: string
       limit?: number
       viewUUID?: string
