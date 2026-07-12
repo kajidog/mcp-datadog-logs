@@ -131,8 +131,8 @@ describe('datadog_run_investigation', () => {
       expect.anything(),
       expect.objectContaining({
         query: 'service:payments status:error',
-        from: 'now-7d',
-        to: 'now',
+        from: '2026-07-06T09:10:00.000Z',
+        to: '2026-07-06T10:10:00.000Z',
         cursor: 'page-2',
       })
     )

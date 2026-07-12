@@ -28,11 +28,15 @@ export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<S
   const client = getDatadogClient()
   const existing = opts.viewUUID ? getSession(opts.viewUUID) : undefined
   const loadMoreParams = opts.params.cursor && existing ? existing.result.params : undefined
+  const loadMoreRange = opts.params.cursor && existing ? existing.result.resolvedRange : undefined
   const title = opts.params.title ?? existing?.title
   const params: InvestigationParams = {
     query: opts.params.query ?? loadMoreParams?.query ?? '*',
-    from: opts.params.from ?? loadMoreParams?.from ?? 'now-1h',
-    to: opts.params.to ?? loadMoreParams?.to ?? 'now',
+    // Freeze relative ranges (for example now-1h -> now) to the exact window
+    // resolved by the first request. Reusing the relative strings here would
+    // shift the search and aggregate window every time another page is loaded.
+    from: opts.params.from ?? (loadMoreRange ? new Date(loadMoreRange.fromMs).toISOString() : 'now-1h'),
+    to: opts.params.to ?? (loadMoreRange ? new Date(loadMoreRange.toMs).toISOString() : 'now'),
     groupBy: opts.params.groupBy ?? loadMoreParams?.groupBy,
     limit: opts.params.limit ?? loadMoreParams?.limit,
     cursor: opts.params.cursor,

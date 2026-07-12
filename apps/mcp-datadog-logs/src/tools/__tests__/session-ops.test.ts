@@ -78,7 +78,7 @@ describe('runAndStoreInvestigation', () => {
     expect([...second.session.rawById.keys()].sort()).toEqual(['log-1', 'log-2', 'log-3', 'log-4', 'log-5'])
   })
 
-  it('inherits the stored query and range when a cursor continuation omits them', async () => {
+  it('inherits stored parameters and freezes the resolved range for a cursor continuation', async () => {
     mockRun({
       params: { query: 'service:checkout', from: 'now-7d', to: 'now', groupBy: '@env', limit: 50 },
     })
@@ -99,8 +99,8 @@ describe('runAndStoreInvestigation', () => {
       expect.anything(),
       expect.objectContaining({
         query: 'service:checkout',
-        from: 'now-7d',
-        to: 'now',
+        from: '2026-07-06T09:10:00.000Z',
+        to: '2026-07-06T10:10:00.000Z',
         groupBy: '@env',
         limit: 50,
         cursor: 'page-2',
