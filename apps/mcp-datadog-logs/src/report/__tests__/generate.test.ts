@@ -53,14 +53,23 @@ describe('generateReport', () => {
     expect(html).toContain('<details data-status=')
   })
 
-  it('renders escaped AI findings when present', () => {
+  it('renders AI findings as safe GFM Markdown', () => {
     const html = generateReport(
-      { ...fixtureResult(), findings: 'Root cause: <script>alert(1)</script>\nline2' },
+      {
+        ...fixtureResult(),
+        findings:
+          '## Root cause\n\n- **Database timeout**\n- Retry exhausted\n\n| service | count |\n| --- | ---: |\n| api | 12 |\n\n[Runbook](https://example.com/runbook)\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))',
+      },
       new Map()
     )
     expect(html).toContain('AI Findings')
+    expect(html).toContain('<h2>Root cause</h2>')
+    expect(html).toContain('<strong>Database timeout</strong>')
+    expect(html).toContain('<table>')
+    expect(html).toContain('href="https://example.com/runbook" target="_blank" rel="noreferrer noopener"')
     expect(html).not.toContain('<script>alert(1)')
-    expect(html).toContain('Root cause: &lt;script&gt;alert(1)&lt;/script&gt;\nline2')
+    expect(html).toContain('&#x3C;script>alert(1)&#x3C;/script>')
+    expect(html).not.toContain('href="javascript:')
   })
 
   it('omits the findings section when findings are absent', () => {

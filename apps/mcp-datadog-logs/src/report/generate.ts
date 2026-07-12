@@ -1,5 +1,6 @@
 import type { FacetBreakdown, InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
 import type { RawLog } from '../datadog/normalize.js'
+import { renderMarkdown } from './markdown.js'
 import { REPORT_JS } from './script.js'
 import { REPORT_CSS } from './styles.js'
 import { renderTimelineSvg, stackStatuses, statusColor } from './svg-timeline.js'
@@ -87,7 +88,7 @@ function renderFindingsSection(findings: string | undefined): string {
   }
   return `<section>
     <h2>AI Findings</h2>
-    <div class="card"><p class="findings">${escapeHtml(findings)}</p></div>
+    <div class="card findings">${renderMarkdown(findings)}</div>
   </section>`
 }
 

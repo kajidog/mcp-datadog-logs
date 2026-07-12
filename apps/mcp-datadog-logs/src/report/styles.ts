@@ -96,7 +96,22 @@ h2 { font-size: 15px; margin: 0 0 12px; color: var(--text-primary); }
   padding: 16px;
 }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.findings { white-space: pre-wrap; margin: 0; font-size: 13px; color: var(--text-secondary); }
+.findings { font-size: 13px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.findings > :first-child { margin-top: 0; }
+.findings > :last-child { margin-bottom: 0; }
+.findings h1, .findings h2, .findings h3 { color: var(--text-primary); margin: 14px 0 6px; }
+.findings h1 { font-size: 17px; }
+.findings h2 { font-size: 15px; }
+.findings h3 { font-size: 14px; }
+.findings p, .findings ul, .findings ol, .findings pre, .findings blockquote { margin: 8px 0; }
+.findings ul, .findings ol { padding-left: 24px; }
+.findings code { background: var(--code-bg); border-radius: 4px; padding: 1px 4px; font-size: 12px; }
+.findings pre { background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+.findings pre code { padding: 0; background: none; }
+.findings blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-muted); }
+.findings a { color: var(--accent); }
+.findings table { margin: 8px 0; }
+.findings del { color: var(--text-muted); }
 .tile .label { color: var(--text-muted); font-size: 12px; }
 .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
 .tile .value.error { color: var(--status-error); }
