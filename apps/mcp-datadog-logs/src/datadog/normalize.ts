@@ -90,9 +90,19 @@ function extractHostFromAttributes(attributes: Record<string, unknown> | undefin
  * `by` and an array of {time,value} points in `computes.c0`.
  */
 export function normalizeTimeline(buckets: RawAggregateBucket[], caps: NormalizeCaps = DEFAULT_CAPS): TimelineBucket[] {
+  return normalizeTimelineByFacet(buckets, 'status', caps)
+}
+
+/** Converts facet-grouped aggregateLogs timeseries buckets into counts by time. */
+export function normalizeTimelineByFacet(
+  buckets: RawAggregateBucket[],
+  facet: string,
+  caps: NormalizeCaps = DEFAULT_CAPS
+): TimelineBucket[] {
   const byTime = new Map<string, Record<string, number>>()
   for (const bucket of buckets) {
-    const status = normalizeStatus(firstStringValue(bucket.by))
+    const rawValue = bucket.by?.[facet] ?? firstValue(bucket.by)
+    const value = facet === 'status' ? normalizeStatus(toOptionalString(rawValue)) : String(rawValue ?? 'N/A')
     const points = bucket.computes?.c0
     if (!Array.isArray(points)) {
       continue
@@ -103,7 +113,7 @@ export function normalizeTimeline(buckets: RawAggregateBucket[], caps: Normalize
         continue
       }
       const counts = byTime.get(time) ?? {}
-      counts[status] = (counts[status] ?? 0) + (point.value ?? 0)
+      counts[value] = (counts[value] ?? 0) + (point.value ?? 0)
       byTime.set(time, counts)
     }
   }
@@ -111,6 +121,14 @@ export function normalizeTimeline(buckets: RawAggregateBucket[], caps: Normalize
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([time, counts]) => ({ time, counts }))
   return sorted.slice(0, caps.maxTimelineBuckets)
+}
+
+function firstValue(by: Record<string, unknown> | undefined): unknown {
+  return by ? Object.values(by)[0] : undefined
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  return value === undefined || value === null ? undefined : String(value)
 }
 
 function firstStringValue(by: Record<string, unknown> | undefined): string | undefined {

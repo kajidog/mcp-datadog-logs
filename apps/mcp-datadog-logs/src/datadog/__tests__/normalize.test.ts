@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CAPS, normalizeFacet, normalizeLogRow, normalizeStatus, normalizeTimeline } from '../normalize.js'
+import {
+  DEFAULT_CAPS,
+  normalizeFacet,
+  normalizeLogRow,
+  normalizeStatus,
+  normalizeTimeline,
+  normalizeTimelineByFacet,
+} from '../normalize.js'
 
 describe('normalizeStatus', () => {
   it('maps aliases', () => {
@@ -90,6 +97,23 @@ describe('normalizeTimeline', () => {
 
   it('ignores non-timeseries computes and missing points', () => {
     expect(normalizeTimeline([{ by: { status: 'error' }, computes: { c0: 12 } }])).toEqual([])
+  })
+
+  it('preserves non-status facet values', () => {
+    const timeline = normalizeTimelineByFacet(
+      [
+        {
+          by: { host: 'API-HOST-01' },
+          computes: { c0: [{ time: '2026-07-06T10:00:00Z', value: 7 }] },
+        },
+        {
+          by: { '@http.status_code': 500 },
+          computes: { c0: [{ time: '2026-07-06T10:00:00Z', value: 2 }] },
+        },
+      ],
+      'host'
+    )
+    expect(timeline).toEqual([{ time: '2026-07-06T10:00:00.000Z', counts: { '500': 2, 'API-HOST-01': 7 } }])
   })
 })
 
