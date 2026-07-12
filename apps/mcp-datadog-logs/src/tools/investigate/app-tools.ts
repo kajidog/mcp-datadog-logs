@@ -117,16 +117,32 @@ export function registerInvestigateAppTools(server: McpServer): void {
     {
       title: 'Export Investigation Report (App)',
       description:
-        'Generate a self-contained HTML report for the investigation and write it to the export directory. Only callable from the app UI.',
+        'Export the investigation to the export directory as an HTML report (default) or CSV/JSON of the fetched rows. Only callable from the app UI.',
       inputSchema: {
         viewUUID: z.string().describe('Investigation view ID'),
         title: z.string().optional().describe('Report title override'),
+        format: z.enum(['html', 'csv', 'json']).optional().describe('Output format (default "html")'),
+        rowIds: z
+          .array(z.string())
+          .max(HARD_MAX_ROWS)
+          .optional()
+          .describe('csv/json only: export just these stored rows (e.g. the filtered view)'),
       },
       _meta: appOnlyMeta,
     },
-    async ({ viewUUID, title }: { viewUUID: string; title?: string }): Promise<CallToolResult> => {
+    async ({
+      viewUUID,
+      title,
+      format,
+      rowIds,
+    }: {
+      viewUUID: string
+      title?: string
+      format?: 'html' | 'csv' | 'json'
+      rowIds?: string[]
+    }): Promise<CallToolResult> => {
       try {
-        return jsonResult(await exportInvestigationReport({ viewUUID, title }))
+        return jsonResult(await exportInvestigationReport({ viewUUID, title, format, rowIds }))
       } catch (error) {
         return createErrorResponse(error)
       }

@@ -67,6 +67,24 @@ describe('generateReport', () => {
     expect(generateReport(fixtureResult(), new Map())).not.toContain('AI Findings')
   })
 
+  it('renders escaped message patterns and omits the section when absent', () => {
+    const withPatterns = generateReport(
+      {
+        ...fixtureResult(),
+        patterns: [
+          { template: '<script>boom</script> took <*>', count: 3, ratio: 0.75, example: 'boom took 3s', rowIds: [] },
+        ],
+      },
+      new Map()
+    )
+    expect(withPatterns).toContain('Message patterns')
+    expect(withPatterns).toContain('&lt;script&gt;boom&lt;/script&gt; took &lt;*&gt;')
+    expect(withPatterns).not.toContain('<script>boom')
+    expect(withPatterns).toContain('75%')
+
+    expect(generateReport(fixtureResult(), new Map())).not.toContain('Message patterns')
+  })
+
   it('includes raw detail JSON when available, truncated when huge', () => {
     const raw = { id: 'log-1', attributes: { message: 'y'.repeat(10_000) } }
     const html = generateReport(fixtureResult(), new Map([['log-1', raw]]))

@@ -51,6 +51,9 @@ beforeEach(() => {
   clearSessions()
   runInvestigationMock.mockReset()
   vi.unstubAllEnvs()
+  // Fresh dir per test so sessions persisted by one test never leak into the
+  // "missing session" cases of another.
+  vi.stubEnv('MCP_DATADOG_SESSION_DIR', mkdtempSync(join(tmpdir(), 'dd-sessions-')))
 })
 
 describe('datadog_investigate_logs with viewUUID', () => {
@@ -133,5 +136,45 @@ describe('datadog_export_report', () => {
     const res = await call({ viewUUID: VIEW_UUID })
     expect(res.isError).toBe(true)
     expect(resultText(res)).toContain('not found')
+  })
+
+  it('writes CSV/JSON data exports without opening a browser', async () => {
+    seedSession()
+    const dir = mkdtempSync(join(tmpdir(), 'dd-report-'))
+    vi.stubEnv('MCP_DATADOG_EXPORT_DIR', dir)
+    const call = getHandler('datadog_export_report')
+
+    const csvRes = await call({ viewUUID: VIEW_UUID, format: 'csv' })
+    expect(csvRes.isError).toBeUndefined()
+    const csvPath = resultText(csvRes).match(/Report saved to (\S+\.csv)/)?.[1]
+    expect(csvPath).toBeDefined()
+    const csv = readFileSync(csvPath as string, 'utf-8')
+    expect(csv).toContain('id,timestamp,status,service,host,message,tags')
+    expect(csv).toContain('log-1')
+
+    const jsonRes = await call({ viewUUID: VIEW_UUID, format: 'json' })
+    const jsonPath = resultText(jsonRes).match(/Report saved to (\S+\.json)/)?.[1]
+    const parsed = JSON.parse(readFileSync(jsonPath as string, 'utf-8'))
+    expect(parsed.meta.rowCount).toBe(4)
+    expect(parsed.rows).toHaveLength(4)
+  })
+})
+
+describe('_export_report (app)', () => {
+  it('exports only the requested rowIds for data formats', async () => {
+    seedSession()
+    const dir = mkdtempSync(join(tmpdir(), 'dd-report-'))
+    vi.stubEnv('MCP_DATADOG_EXPORT_DIR', dir)
+
+    const call = getHandler('_export_report')
+    const res = await call({ viewUUID: VIEW_UUID, format: 'csv', rowIds: ['log-2', 'log-3'] })
+    expect(res.isError).toBeUndefined()
+    const exported = JSON.parse(resultText(res))
+    expect(exported.ok).toBe(true)
+    expect(exported.opened).toBe(false)
+    const csv = readFileSync(exported.path, 'utf-8')
+    expect(csv).toContain('log-2')
+    expect(csv).toContain('log-3')
+    expect(csv).not.toContain('log-1')
   })
 })

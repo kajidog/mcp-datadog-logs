@@ -55,6 +55,18 @@ export interface FacetBreakdown {
   otherCount?: number
 }
 
+export interface LogPattern {
+  /** Normalized message template; variable parts replaced with "<*>" */
+  template: string
+  count: number
+  /** count / analyzed row count, 0–1 */
+  ratio: number
+  /** First raw message that produced this template */
+  example: string
+  /** Ids of the analyzed rows belonging to this pattern (client-side filtering) */
+  rowIds: string[]
+}
+
 export interface InvestigationResult {
   params: InvestigationParams
   /** Approximate total matching logs (from aggregation) */
@@ -70,6 +82,8 @@ export interface InvestigationResult {
   fetchedAt: string
   /** AI-authored findings/notes for this investigation (plain text, may contain line breaks) */
   findings?: string
+  /** Message templates clustered from the fetched rows (not the full match set) */
+  patterns?: LogPattern[]
   /** Resolved absolute time range (epoch ms) for display */
   resolvedRange: { fromMs: number; toMs: number }
 }

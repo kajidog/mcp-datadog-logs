@@ -1,4 +1,4 @@
-import type { InvestigationResult } from '@kajidog/investigation-shared'
+import type { InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
 import type { App } from '@modelcontextprotocol/ext-apps'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
@@ -66,6 +66,7 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
       },
     ],
     rows,
+    patterns: mockPatterns(rows),
     nextCursor: 'mock-cursor',
     findings:
       'payments サービスで 12:00 以降 upstream timeout が急増。\n' +
@@ -73,6 +74,29 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
     fetchedAt: new Date().toISOString(),
     resolvedRange: { fromMs: now - buckets * stepMs, toMs: now },
   }
+}
+
+/** Same shape the server produces: rows grouped by message template, most frequent first. */
+function mockPatterns(rows: LogRow[]): LogPattern[] {
+  const groups = new Map<string, { example: string; rowIds: string[] }>()
+  for (const row of rows) {
+    const template = row.message.replace(/\d+(?:\.\d+)?[a-z]*/g, '<*>').replace(/"[^"]*"/g, '<*>')
+    const group = groups.get(template)
+    if (group) {
+      group.rowIds.push(row.id)
+    } else {
+      groups.set(template, { example: row.message, rowIds: [row.id] })
+    }
+  }
+  return [...groups.entries()]
+    .sort(([, a], [, b]) => b.rowIds.length - a.rowIds.length)
+    .map(([template, group]) => ({
+      template,
+      count: group.rowIds.length,
+      ratio: group.rowIds.length / rows.length,
+      example: group.example,
+      rowIds: group.rowIds,
+    }))
 }
 
 /**
@@ -106,8 +130,14 @@ export function createMockApp(): App {
               tags: ['env:prod', 'team:core'],
             },
           })
-        case '_export_report':
-          return json({ ok: true, path: '/home/dev/Downloads/datadog-logs-report-20260706-120000.html', opened: true })
+        case '_export_report': {
+          const format = args.format ?? 'html'
+          return json({
+            ok: true,
+            path: `/home/dev/Downloads/datadog-logs-report-20260706-120000.${format}`,
+            opened: format === 'html',
+          })
+        }
         default:
           return json({ notFound: true })
       }

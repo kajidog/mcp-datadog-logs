@@ -1,4 +1,4 @@
-import type { FacetBreakdown, InvestigationResult, LogRow } from '@kajidog/investigation-shared'
+import type { FacetBreakdown, InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
 import type { RawLog } from '../datadog/normalize.js'
 import { REPORT_JS } from './script.js'
 import { REPORT_CSS } from './styles.js'
@@ -57,6 +57,7 @@ export function generateReport(
   ${renderFindingsSection(result.findings)}
   ${renderTimelineSection(result, timeZone)}
   ${renderFacetsSection(result.facets)}
+  ${renderPatternsSection(result.patterns, result.rows.length)}
   ${renderLogsSection(result, rawById, formatTs)}
   <footer>Exported by @kajidog/mcp-datadog-logs · ${escapeHtml(result.rows.length.toString())} of ~${escapeHtml(result.totalCount.toString())} matching logs included</footer>
 </main>
@@ -130,6 +131,25 @@ function renderFacetsSection(facets: FacetBreakdown[]): string {
     })
     .join('')
   return `<section><h2>Breakdowns</h2><div class="facets">${cards}</div></section>`
+}
+
+function renderPatternsSection(patterns: LogPattern[] | undefined, analyzedRows: number): string {
+  if (!patterns || patterns.length === 0) {
+    return ''
+  }
+  const rows = patterns
+    .map(
+      (pattern) =>
+        `<tr><td class="num">${formatCount(pattern.count)}</td><td class="num">${Math.round(pattern.ratio * 100)}%</td><td><code>${escapeHtml(pattern.template)}</code></td></tr>`
+    )
+    .join('')
+  return `<section>
+    <h2>Message patterns (from ${formatCount(analyzedRows)} fetched rows)</h2>
+    <div class="card">
+      <table><thead><tr><th style="text-align:right">Count</th><th style="text-align:right">%</th><th>Template</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+  </section>`
 }
 
 function renderLogsSection(

@@ -42,6 +42,34 @@ describe('formatInvestigationSummary', () => {
     expect(summary).not.toContain('x'.repeat(201))
   })
 
+  it('lists top patterns without rowIds and honors topPatterns: 0', () => {
+    const result = fixtureResult({
+      patterns: [
+        {
+          template: 'Payment failed for <*>',
+          count: 3,
+          ratio: 0.75,
+          example: 'Payment failed for A',
+          rowIds: ['log-1'],
+        },
+        { template: `Cache ${'y'.repeat(200)}`, count: 1, ratio: 0.25, example: 'Cache …', rowIds: ['log-4'] },
+      ],
+    })
+    const summary = formatInvestigationSummary(result, VIEW_UUID, { topPatterns: 5 })
+    expect(summary).toContain('Top patterns (of 4 fetched rows):')
+    expect(summary).toContain('3 (75%) Payment failed for <*>')
+    expect(summary).toContain(`Cache ${'y'.repeat(114)}…`)
+    expect(summary).not.toContain('rowIds')
+    expect(summary).not.toContain('y'.repeat(115))
+
+    const capped = formatInvestigationSummary(result, VIEW_UUID, { topPatterns: 1 })
+    expect(capped).toContain('Top patterns (of 4 fetched rows) +1 more:')
+    expect(capped).not.toContain('Cache')
+
+    expect(formatInvestigationSummary(result, VIEW_UUID, { topPatterns: 0 })).not.toContain('Top patterns')
+    expect(formatInvestigationSummary(fixtureResult(), VIEW_UUID)).not.toContain('Top patterns')
+  })
+
   it('appends nextCursor only when present', () => {
     expect(formatInvestigationSummary(fixtureResult(), VIEW_UUID)).not.toContain('nextCursor:')
     expect(formatInvestigationSummary(fixtureResult({ nextCursor: 'abc123' }), VIEW_UUID)).toContain(

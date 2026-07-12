@@ -55,10 +55,23 @@ export async function fetchLogDetail(app: App, viewUUID: string, logId: string):
   return parsed && typeof parsed === 'object' && 'notFound' in parsed ? null : parsed
 }
 
-export async function exportReport(app: App, viewUUID: string, title?: string): Promise<ExportResult> {
+export interface ExportReportArgs {
+  title?: string
+  format?: 'html' | 'csv' | 'json'
+  /** csv/json only: export just these stored rows (e.g. the filtered view) */
+  rowIds?: string[]
+}
+
+export async function exportReport(app: App, viewUUID: string, args: ExportReportArgs = {}): Promise<ExportResult> {
+  const { title, format, rowIds } = args
   const result = await app.callServerTool({
     name: '_export_report',
-    arguments: { viewUUID, ...(title ? { title } : {}) },
+    arguments: {
+      viewUUID,
+      ...(title ? { title } : {}),
+      ...(format ? { format } : {}),
+      ...(rowIds ? { rowIds } : {}),
+    },
   })
   return parseJsonResult<ExportResult>(result, '_export_report')
 }

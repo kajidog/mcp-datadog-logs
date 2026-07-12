@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 export interface DatadogConfig {
@@ -14,6 +14,10 @@ export interface ServerConfig {
   maxRows: number
   /** IANA time zone used for timestamps in exported HTML reports */
   timeZone: string
+  /** Directory where investigation sessions are persisted across restarts */
+  sessionDir: string
+  /** False disables on-disk session persistence (MCP_DATADOG_PERSIST_SESSIONS=false) */
+  persistSessions: boolean
 }
 
 export const HARD_MAX_ROWS = 500
@@ -50,6 +54,8 @@ export function getServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCon
     exportDir: resolveExportDir(env),
     maxRows,
     timeZone: resolveTimeZone(env),
+    sessionDir: resolveSessionDir(env),
+    persistSessions: env.MCP_DATADOG_PERSIST_SESSIONS?.trim().toLowerCase() !== 'false',
   }
 }
 
@@ -65,6 +71,23 @@ function resolveTimeZone(env: NodeJS.ProcessEnv): string {
     // stdout is the MCP channel — warnings go to stderr.
     console.error(`mcp-datadog-logs: invalid MCP_DATADOG_TIMEZONE "${fromEnv}", falling back to UTC`)
     return 'UTC'
+  }
+}
+
+function resolveSessionDir(env: NodeJS.ProcessEnv): string {
+  const fromEnv = env.MCP_DATADOG_SESSION_DIR?.trim()
+  if (fromEnv) {
+    return fromEnv
+  }
+  const cacheHome = env.XDG_CACHE_HOME?.trim() || safeCacheHome()
+  return join(cacheHome, 'mcp-datadog-logs', 'sessions')
+}
+
+function safeCacheHome(): string {
+  try {
+    return join(homedir(), '.cache')
+  } catch {
+    return tmpdir()
   }
 }
 

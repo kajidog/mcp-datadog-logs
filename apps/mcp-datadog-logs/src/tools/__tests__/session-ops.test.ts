@@ -78,6 +78,24 @@ describe('runAndStoreInvestigation', () => {
     expect([...second.session.rawById.keys()].sort()).toEqual(['log-1', 'log-2', 'log-3', 'log-4', 'log-5'])
   })
 
+  it('extracts message patterns over all rows, recomputing after a cursor merge', async () => {
+    mockRun()
+    const first = await runAndStoreInvestigation({ params: { query: '*', from: 'now-1h', to: 'now' } })
+    expect(first.session.result.patterns).toBeDefined()
+    const firstTotal = (first.session.result.patterns ?? []).reduce((sum, p) => sum + p.count, 0)
+    expect(firstTotal).toBe(4)
+
+    mockRun({ rows: [fixtureRow('log-5'), fixtureRow('log-6')] })
+    const second = await runAndStoreInvestigation({
+      viewUUID: first.viewUUID,
+      params: { query: '*', from: 'now-1h', to: 'now', cursor: 'page-2' },
+    })
+    const secondTotal = (second.session.result.patterns ?? []).reduce((sum, p) => sum + p.count, 0)
+    expect(secondTotal).toBe(6)
+    const allRowIds = (second.session.result.patterns ?? []).flatMap((p) => p.rowIds).sort()
+    expect(allRowIds).toEqual(['log-1', 'log-2', 'log-3', 'log-4', 'log-5', 'log-6'])
+  })
+
   it('recreates a session for an evicted viewUUID, keeping the handle stable', async () => {
     mockRun()
     const { viewUUID, session } = await runAndStoreInvestigation({

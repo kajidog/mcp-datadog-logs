@@ -2,8 +2,9 @@ import type { TimelineBucket } from '@kajidog/investigation-shared'
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { ChevronDown, CircleAlert, ListFilter, Loader2, NotebookPen, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, FileDown, ListFilter, Loader2, NotebookPen, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { FACET_META, FacetSidebar, facetKey } from './FacetSidebar'
 import { LogTable } from './LogTable'
 import { Markdown } from './Markdown'
+import { PatternList } from './PatternList'
 import { QueryBar } from './QueryBar'
 import { TimelineChart } from './TimelineChart'
 
@@ -39,6 +41,8 @@ export function Investigator() {
   // Client-side narrowing of already-fetched rows — no API call involved.
   const [localKeyword, setLocalKeyword] = useState('')
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null)
+  const [selectedPattern, setSelectedPattern] = useState<string | null>(null)
+  const [exportingData, setExportingData] = useState<'csv' | 'json' | null>(null)
 
   const { app: connectedApp } = useApp({
     appInfo: { name: 'Datadog Logs Investigator', version: '1.0.0' },
@@ -76,8 +80,16 @@ export function Investigator() {
       ? resolveBucketRange(result.timeline, effectiveBucket, result.interval, result.resolvedRange.toMs)
       : null
   const keywordTerms = localKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const localFilterActive = Boolean(bucketRange) || keywordTerms.length > 0
+  // A pattern stays selected only while it exists in the current result, so a
+  // re-run that changes the clustering implicitly clears it.
+  const activePattern =
+    selectedPattern !== null ? (result?.patterns ?? []).find((p) => p.template === selectedPattern) : undefined
+  const patternRowIds = activePattern ? new Set(activePattern.rowIds) : null
+  const localFilterActive = Boolean(bucketRange) || keywordTerms.length > 0 || Boolean(patternRowIds)
   const filteredRows = (result?.rows ?? []).filter((row) => {
+    if (patternRowIds && !patternRowIds.has(row.id)) {
+      return false
+    }
     if (bucketRange) {
       const t = Date.parse(row.timestamp)
       if (Number.isNaN(t) || t < bucketRange.startMs || t >= bucketRange.endMs) {
@@ -111,6 +123,8 @@ export function Investigator() {
     error ?? '',
     exportPath ?? '',
     result?.findings?.length ?? 0,
+    activePattern?.template ?? '',
+    result?.patterns?.length ?? 0,
   ].join(':')
   useMcpResizeNotifications(isStandaloneDev ? null : connectedApp, resizeTrigger)
 
@@ -168,7 +182,7 @@ export function Investigator() {
     setExportPath(null)
     setExportOpenError(null)
     try {
-      const exported = await exportReport(app, viewUUID, result?.params.title)
+      const exported = await exportReport(app, viewUUID, { title: result?.params.title })
       if (exported.ok && exported.path) {
         setExportPath(exported.path)
         setExportOpenError(exported.openError ?? null)
@@ -179,6 +193,34 @@ export function Investigator() {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setExporting(false)
+    }
+  }
+
+  // CSV/JSON of the rows currently shown (all local filters applied).
+  const handleExportData = async (format: 'csv' | 'json') => {
+    const app = appRef.current
+    const viewUUID = viewUUIDRef.current
+    if (!app || !viewUUID || exportingData) {
+      return
+    }
+    setExportingData(format)
+    setExportPath(null)
+    setExportOpenError(null)
+    try {
+      const exported = await exportReport(app, viewUUID, {
+        title: result?.params.title,
+        format,
+        rowIds: filteredRows.map((row) => row.id),
+      })
+      if (exported.ok && exported.path) {
+        setExportPath(exported.path)
+      } else {
+        setError(exported.error ?? 'エクスポートに失敗しました')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setExportingData(null)
     }
   }
 
@@ -329,6 +371,12 @@ export function Investigator() {
               />
             </CardContent>
           </Card>
+          <PatternList
+            patterns={result.patterns ?? []}
+            analyzedCount={result.rows.length}
+            selectedTemplate={activePattern?.template ?? null}
+            onSelect={setSelectedPattern}
+          />
           <Card className={cn('py-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-hidden')}>
             <CardContent className={cn('px-1', fullscreen && 'md:min-h-0 md:flex-1 md:overflow-auto')}>
               <div className="flex flex-wrap items-center gap-2 border-b px-2 pb-2 pt-1">
@@ -352,14 +400,44 @@ export function Investigator() {
                     <X className="size-3 text-muted-foreground" />
                   </button>
                 )}
+                {activePattern && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPattern(null)}
+                    title="パターンの絞り込みを解除"
+                    className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1.5 text-xs hover:bg-accent"
+                  >
+                    <span className="text-muted-foreground">パターン:</span>
+                    <span className="max-w-48 truncate font-mono font-medium">{activePattern.template}</span>
+                    <X className="size-3 text-muted-foreground" />
+                  </button>
+                )}
                 {localFilterActive && (
                   <span className="text-[11px] text-muted-foreground">
                     取得済み {result.rows.length} 件中 {filteredRows.length} 件を表示
                   </span>
                 )}
+                <div className="ml-auto flex items-center gap-1">
+                  {(['csv', 'json'] as const).map((format) => (
+                    <Button
+                      key={format}
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-muted-foreground"
+                      disabled={Boolean(exportingData) || filteredRows.length === 0}
+                      title={`表示中の ${filteredRows.length} 件を ${format.toUpperCase()} で書き出し`}
+                      onClick={() => void handleExportData(format)}
+                    >
+                      {exportingData === format ? <Loader2 className="animate-spin" /> : <FileDown aria-hidden />}
+                      {format.toUpperCase()}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <LogTable
                 rows={filteredRows}
+                highlightTerms={keywordTerms}
                 hasMore={Boolean(result.nextCursor)}
                 loadingMore={loadingMore}
                 onLoadMore={() => void loadMore()}

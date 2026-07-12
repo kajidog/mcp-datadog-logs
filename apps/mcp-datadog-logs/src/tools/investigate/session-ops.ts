@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { InvestigationParams, InvestigationResult } from '@kajidog/investigation-shared'
+import { extractLogPatterns } from '../../analysis/patterns.js'
 import { getDatadogClient } from '../../datadog/client.js'
 import { runInvestigation } from '../../datadog/investigation.js'
 import { getSession, type InvestigationSession, setSession } from './runtime.js'
@@ -38,6 +39,8 @@ export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<S
       }
     }
   }
+  // After the load-more merge so patterns always reflect every stored row.
+  result.patterns = extractLogPatterns(result.rows)
 
   // Reuse a passed-but-evicted viewUUID so callers keep a stable handle; the
   // session is simply recreated (previous rows/findings are gone).

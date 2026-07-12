@@ -18,7 +18,7 @@ export function registerRunInvestigationTool(server: McpServer): void {
         'The full result is stored server-side under a viewUUID; only a compact summary is returned. ' +
         'Pass the same viewUUID to iterate on one session (refine the query, or load more rows with cursor), ' +
         'then call datadog_investigate_logs with the viewUUID to display the session to the user. ' +
-        'Sessions are in-memory and may expire on server restart.',
+        'Sessions are cached in memory and mirrored to disk, so a viewUUID usually survives server restarts.',
       inputSchema: {
         query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
         from: z.string().default('now-1h').describe('Start time: Datadog time math ("now-4h") or ISO 8601'),

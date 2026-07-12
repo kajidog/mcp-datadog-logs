@@ -4,13 +4,19 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { getServerConfig } from '../../config.js'
 import { getDatadogClient } from '../../datadog/client.js'
+import { investigationToCsv, investigationToJson } from '../../report/export-data.js'
 import { generateReport } from '../../report/generate.js'
 import { getSession } from './runtime.js'
 import { sessionResult } from './session-ops.js'
 
+export type ExportFormat = 'html' | 'csv' | 'json'
+
 export interface ExportReportOptions {
   viewUUID: string
   title?: string
+  format?: ExportFormat
+  /** csv/json only: export just these stored rows (e.g. the UI's filtered view) */
+  rowIds?: string[]
 }
 
 export type ExportReportResult =
@@ -18,26 +24,43 @@ export type ExportReportResult =
   | { ok: false; error: string }
 
 /**
- * Generates the self-contained HTML report for a stored investigation session,
- * writes it to the export directory and asks the OS to open it in the default
- * browser. Shared by the app-only `_export_report` tool and the model-facing
- * `datadog_export_report` tool.
+ * Exports a stored investigation session to the export directory as a
+ * self-contained HTML report (default), or as CSV/JSON of the fetched log
+ * rows. HTML is opened in the default browser; data formats are not (the OS
+ * handler for .csv/.json is unpredictable). Shared by the app-only
+ * `_export_report` tool and the model-facing `datadog_export_report` tool.
  */
-export async function exportInvestigationReport({ viewUUID, title }: ExportReportOptions): Promise<ExportReportResult> {
+export async function exportInvestigationReport({
+  viewUUID,
+  title,
+  format = 'html',
+  rowIds,
+}: ExportReportOptions): Promise<ExportReportResult> {
   const session = getSession(viewUUID)
   if (!session) {
     return { ok: false, error: 'Investigation session not found. Re-run the investigation first.' }
   }
   const { exportDir, timeZone } = getServerConfig()
-  const html = generateReport(sessionResult(session), session.rawById, {
-    title: title ?? session.title,
-    site: safeSite(),
-    timeZone,
-  })
+  const result = sessionResult(session)
+  const exportTitle = title ?? session.title
+  let content: string
+  if (format === 'html') {
+    content = generateReport(result, session.rawById, { title: exportTitle, site: safeSite(), timeZone })
+  } else {
+    const idSet = rowIds ? new Set(rowIds) : undefined
+    const rows = idSet ? result.rows.filter((row) => idSet.has(row.id)) : result.rows
+    content =
+      format === 'csv'
+        ? investigationToCsv(result, { rows })
+        : investigationToJson(result, { title: exportTitle, rows })
+  }
   mkdirSync(exportDir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-')
-  const path = join(exportDir, `datadog-logs-report-${stamp}.html`)
-  writeFileSync(path, html, 'utf-8')
+  const path = join(exportDir, `datadog-logs-report-${stamp}.${format}`)
+  writeFileSync(path, content, 'utf-8')
+  if (format !== 'html') {
+    return { ok: true, path, opened: false }
+  }
   const openResult = await openExportedReport(path)
   return { ok: true, path, ...openResult }
 }
