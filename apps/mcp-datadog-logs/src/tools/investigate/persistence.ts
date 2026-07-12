@@ -38,6 +38,12 @@ export function persistSession(viewUUID: string, session: InvestigationSession):
   if (!persistSessions) {
     return
   }
+  // Write-path twin of the loadSession guard: app-tool callers control this
+  // string, so a non-UUID handle must never shape a path under sessionDir.
+  if (!FILE_PATTERN.test(`${viewUUID}.json`)) {
+    warn('refusing to persist session with a non-UUID id', viewUUID)
+    return
+  }
   try {
     const file: PersistedSessionFile = {
       version: SCHEMA_VERSION,

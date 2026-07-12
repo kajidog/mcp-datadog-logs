@@ -24,6 +24,23 @@ describe('investigationToCsv', () => {
     expect(body).toContain('log-2,2026-07-06T10:01:00.000Z,error,,,plain,')
   })
 
+  it('neutralizes spreadsheet formula triggers with a leading apostrophe', () => {
+    const csv = investigationToCsv(
+      fixtureResult({
+        rows: [
+          fixtureRow('log-1', { message: '=HYPERLINK("http://evil.example")', tags: ['+sum', '@cmd'] }),
+          fixtureRow('log-2', { message: '-2+3', service: 'safe-service' }),
+        ],
+      })
+    )
+    expect(csv).toContain(`"'=HYPERLINK(""http://evil.example"")"`)
+    expect(csv).not.toContain(',=HYPERLINK')
+    expect(csv).toContain(`'+sum;@cmd`)
+    expect(csv).toContain(`,'-2+3,`)
+    // Values merely containing (not starting with) a trigger stay untouched
+    expect(csv).toContain(',safe-service,')
+  })
+
   it('exports only the given row subset', () => {
     const result = fixtureResult()
     const csv = investigationToCsv(result, { rows: result.rows.slice(0, 1) })

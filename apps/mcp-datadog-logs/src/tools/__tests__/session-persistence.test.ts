@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -94,5 +94,18 @@ describe('session persistence', () => {
 
   it('ignores viewUUIDs that are not plain uuid file names', () => {
     expect(getSession('../escape')).toBeUndefined()
+  })
+
+  it('never writes a file for a non-UUID session id (path traversal guard)', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(() => setSession('../../escape', fixtureSession())).not.toThrow()
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('non-UUID'))
+    } finally {
+      errorSpy.mockRestore()
+    }
+    expect(readdirSync(dir)).toEqual([])
+    expect(existsSync(join(dir, '..', '..', 'escape.json'))).toBe(false)
+    expect(existsSync(join(dir, '..', '..', 'escape.json.tmp'))).toBe(false)
   })
 })

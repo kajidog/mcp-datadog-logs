@@ -56,10 +56,17 @@ export function investigationToJson(result: InvestigationResult, opts: ExportDat
   return `${JSON.stringify(payload, null, 2)}\n`
 }
 
-/** RFC 4180: quote fields containing separators/quotes/newlines, double inner quotes. */
+/**
+ * RFC 4180: quote fields containing separators/quotes/newlines, double inner
+ * quotes. Log content is untrusted and the export targets spreadsheets, so
+ * fields starting with a formula trigger (=, +, -, @, tab, CR) are neutralized
+ * with a leading apostrophe first — quoting alone does not stop Excel/Sheets
+ * from evaluating them after parsing (CWE-1236).
+ */
 function csvField(value: string): string {
-  if (/[",\r\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`
+  const neutralized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+  if (/[",\r\n]/.test(neutralized)) {
+    return `"${neutralized.replace(/"/g, '""')}"`
   }
-  return value
+  return neutralized
 }
