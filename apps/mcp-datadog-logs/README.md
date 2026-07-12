@@ -14,7 +14,7 @@ needed).
   - full result (log rows, timeline, facets) stored server-side under a `viewUUID`
   - the model receives only a compact summary — iterate without bloating context
   - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
-    plain-text `findings` shown in the UI and the HTML report
+    Markdown `findings` rendered in the UI and the HTML report
 - 📄 `datadog_export_report` — export directly from the model:
   - pass a `viewUUID` to write the self-contained HTML report to disk without opening the UI
   - `format: 'csv' | 'json'` writes the fetched log rows as data instead
@@ -100,11 +100,15 @@ Required Datadog permissions are documented in
 | Tool | Audience | Description |
 |---|---|---|
 | `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor |
-| `datadog_aggregate_logs` | model | Count by facet (`groupBy`) or timeseries (`interval`) |
+| `datadog_aggregate_logs` | model | Count by facet (`groupBy`), or as a timeseries when `interval` is set (per-facet counts per bucket) |
 | `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
 | `datadog_export_report` | model | Write a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` as a self-contained HTML report, or as CSV/JSON of the fetched rows (`format`) — no UI needed |
 | `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |
 | `_get_view_state` / `_run_investigation` / `_get_log_detail` / `_export_report` | UI only | Internal bridge tools called by the app (hidden from the model) |
+
+`from`/`to` accept Datadog time math (`now-4h`, `now`) or ISO 8601. Absolute
+timestamps must include an explicit time zone (`Z` or an offset like `+09:00`);
+values without one (e.g. `2026-07-12T10:00:00`) are rejected as ambiguous.
 
 ## Exported reports
 
