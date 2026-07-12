@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_CAPS,
+  extractTraceId,
+  formatAttributeValue,
+  lookupAttribute,
   normalizeFacet,
   normalizeLogRow,
   normalizeStatus,
@@ -69,6 +72,62 @@ describe('normalizeLogRow', () => {
       attributes: { timestamp: '2026-07-06T10:00:00Z', attributes: { host: 'nested-host' } },
     })
     expect(row.host).toBe('nested-host')
+  })
+})
+
+describe('extractTraceId', () => {
+  it('reads the standard trace_id key', () => {
+    expect(extractTraceId({ trace_id: 'abc123' })).toBe('abc123')
+  })
+
+  it('falls back to a flattened dd.trace_id key', () => {
+    expect(extractTraceId({ 'dd.trace_id': 'flat-id' })).toBe('flat-id')
+  })
+
+  it('falls back to a nested dd object', () => {
+    expect(extractTraceId({ dd: { trace_id: 'nested-id' } })).toBe('nested-id')
+  })
+
+  it('stringifies numeric trace ids', () => {
+    expect(extractTraceId({ trace_id: 4711824721399429 })).toBe('4711824721399429')
+  })
+
+  it('rejects non-scalar values and missing bags', () => {
+    expect(extractTraceId({ trace_id: { nope: true } })).toBeUndefined()
+    expect(extractTraceId({})).toBeUndefined()
+    expect(extractTraceId(undefined)).toBeUndefined()
+  })
+})
+
+describe('lookupAttribute', () => {
+  it('prefers a literal key containing dots over path traversal', () => {
+    expect(lookupAttribute({ 'http.status_code': 402, http: { status_code: 500 } }, 'http.status_code')).toBe(402)
+  })
+
+  it('traverses nested objects by dot path', () => {
+    expect(lookupAttribute({ http: { status_code: 500 } }, 'http.status_code')).toBe(500)
+  })
+
+  it('is null-safe on missing segments and scalar intermediates', () => {
+    expect(lookupAttribute({ http: 'flat' }, 'http.status_code')).toBeUndefined()
+    expect(lookupAttribute({ http: null }, 'http.status_code')).toBeUndefined()
+    expect(lookupAttribute(undefined, 'http.status_code')).toBeUndefined()
+  })
+})
+
+describe('formatAttributeValue', () => {
+  it('keeps primitives as-is', () => {
+    expect(formatAttributeValue(402)).toBe('402')
+    expect(formatAttributeValue('CardError')).toBe('CardError')
+    expect(formatAttributeValue(false)).toBe('false')
+  })
+
+  it('stringifies and truncates objects', () => {
+    const value = { message: 'x'.repeat(200) }
+    const text = formatAttributeValue(value)
+    expect(text.startsWith('{"message":"xxx')).toBe(true)
+    expect(text).toHaveLength(101)
+    expect(text.endsWith('…')).toBe(true)
   })
 })
 

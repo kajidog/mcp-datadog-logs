@@ -1,7 +1,7 @@
 import { client, v2 } from '@datadog/datadog-api-client'
 import type { DatadogConfig } from '../config.js'
 import { getDatadogConfig } from '../config.js'
-import type { RawAggregateBucket, RawLog } from './normalize.js'
+import type { RawAggregateBucket, RawEvent, RawLog, RawSpan } from './normalize.js'
 
 export interface SearchLogsParams {
   query: string
@@ -23,8 +23,34 @@ export interface AggregateParams {
   to: string
 }
 
+export interface ListTraceSpansParams {
+  traceId: string
+  from: string
+  to: string
+  /** Fetch cap across pages. Default 500. */
+  maxSpans?: number
+}
+
+export interface ListTraceSpansResult {
+  spans: RawSpan[]
+  /** True when the cap was hit and more spans exist. */
+  truncated: boolean
+}
+
+export interface SearchEventsParams {
+  query: string
+  from: string
+  to: string
+  limit: number
+}
+
+const SPANS_PAGE_LIMIT = 200
+
+/** Datadog API client wrapper. Despite the name it also covers spans and events. */
 export class DatadogLogsClient {
   private readonly api: v2.LogsApi
+  private readonly spansApi: v2.SpansApi
+  private readonly eventsApi: v2.EventsApi
   private readonly indexes?: string[]
   readonly site: string
 
@@ -43,6 +69,8 @@ export class DatadogLogsClient {
     })
     configuration.setServerVariables({ site: config.site })
     this.api = new v2.LogsApi(configuration)
+    this.spansApi = new v2.SpansApi(configuration)
+    this.eventsApi = new v2.EventsApi(configuration)
     this.indexes = config.indexes
     this.site = config.site
   }
@@ -108,6 +136,45 @@ export class DatadogLogsClient {
       },
     })
     return (response.data?.buckets ?? []) as RawAggregateBucket[]
+  }
+
+  /** All spans of one APM trace, ascending by start time, following cursors up to maxSpans. */
+  async listTraceSpans(params: ListTraceSpansParams): Promise<ListTraceSpansResult> {
+    const cap = params.maxSpans ?? 500
+    const spans: RawSpan[] = []
+    let cursor: string | undefined
+    do {
+      const response = await this.spansApi.listSpans({
+        body: {
+          data: {
+            type: 'search_request',
+            attributes: {
+              filter: { query: `trace_id:${params.traceId}`, from: params.from, to: params.to },
+              sort: 'timestamp',
+              page: {
+                limit: Math.min(SPANS_PAGE_LIMIT, cap - spans.length),
+                ...(cursor ? { cursor } : {}),
+              },
+            },
+          },
+        },
+      })
+      spans.push(...((response.data ?? []) as RawSpan[]))
+      cursor = response.meta?.page?.after
+    } while (cursor && spans.length < cap)
+    return { spans, truncated: Boolean(cursor) && spans.length >= cap }
+  }
+
+  /** Single page of Datadog events (deployments, monitor alerts, ...) matching an events search query. */
+  async searchEvents(params: SearchEventsParams): Promise<RawEvent[]> {
+    const response = await this.eventsApi.searchEvents({
+      body: {
+        filter: { query: params.query, from: params.from, to: params.to },
+        sort: 'timestamp',
+        page: { limit: params.limit },
+      },
+    })
+    return (response.data ?? []) as RawEvent[]
   }
 }
 
