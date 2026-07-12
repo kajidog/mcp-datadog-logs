@@ -5,6 +5,10 @@
   "type": "module",
   "license": "MIT",
   "author": "kajidog",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kajidog/mcp-datadog-logs.git"
+  },
   "keywords": [
     "mcp",
     "modelcontextprotocol",
