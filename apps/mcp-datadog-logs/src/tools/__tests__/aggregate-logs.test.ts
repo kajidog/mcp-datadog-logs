@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { aggregateTimeseriesByFacet } = vi.hoisted(() => ({ aggregateTimeseriesByFacet: vi.fn() }))
 
-vi.mock('../../datadog/client.js', () => ({
+vi.mock('../../datadog/client.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../datadog/client.js')>()),
   getDatadogClient: () => ({ aggregateTimeseriesByFacet }),
 }))
 
@@ -41,5 +42,20 @@ describe('datadog_aggregate_logs', () => {
     expect(result.content[0].text).toBe(
       'Log counts by host per 15m (query: service:web)\n2026-07-06T10:00:00.000Z  API-HOST-01=7'
     )
+  })
+
+  it('rejects timezone-less absolute timestamps before calling Datadog', async () => {
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_aggregate_logs
+
+    const result = await tool.handler({
+      query: '*',
+      from: '2026-07-06T10:00:00',
+      to: '2026-07-06T11:00:00',
+    })
+
+    expect(aggregateTimeseriesByFacet).not.toHaveBeenCalled()
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('must include a time zone')
   })
 })

@@ -58,7 +58,7 @@ export function generateReport(
   ${renderTimelineSection(result, timeZone)}
   ${renderFacetsSection(result.facets)}
   ${renderPatternsSection(result.patterns, result.rows.length)}
-  ${renderLogsSection(result, rawById, formatTs)}
+  ${renderLogsSection(result, rawById, formatTs, timeZone)}
   <footer>Exported by @kajidog/mcp-datadog-logs · ${escapeHtml(result.rows.length.toString())} of ~${escapeHtml(result.totalCount.toString())} matching logs included</footer>
 </main>
 <script>${REPORT_JS}</script>
@@ -155,11 +155,12 @@ function renderPatternsSection(patterns: LogPattern[] | undefined, analyzedRows:
 function renderLogsSection(
   result: InvestigationResult,
   rawById: Map<string, RawLog>,
-  formatTs: (ms: number) => string
+  formatTs: (ms: number) => string,
+  timeZone: string
 ): string {
   const entries = result.rows.map((row) => renderLogEntry(row, rawById.get(row.id), formatTs)).join('')
   return `<section>
-    <h2>Logs (${result.rows.length})</h2>
+    <h2>Logs (${result.rows.length}) <small>— timestamps in ${escapeHtml(timeZone)}</small></h2>
     <div class="log-toolbar">
       <input id="log-search" type="search" placeholder="Filter logs by text…" aria-label="Filter logs by text">
       <span id="active-filters"></span>

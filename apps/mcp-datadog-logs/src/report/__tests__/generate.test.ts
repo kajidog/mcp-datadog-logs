@@ -129,6 +129,7 @@ describe('generateReport', () => {
   it('renders timestamps in the configured time zone', () => {
     const html = generateReport(fixtureResult(), new Map(), { timeZone: 'Asia/Tokyo' })
     expect(html).toContain('data-time-zone="Asia/Tokyo"')
+    expect(html).toContain('timestamps in Asia/Tokyo')
     // 09:10/10:10 UTC → 18:10/19:10 JST
     expect(html).toContain('2026-07-06 18:10:00 → 2026-07-06 19:10:00 (Asia/Tokyo)')
     expect(html).toContain('<span class="time">2026-07-06 19:01:00</span>')

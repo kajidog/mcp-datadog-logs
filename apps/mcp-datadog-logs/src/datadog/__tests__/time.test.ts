@@ -17,6 +17,12 @@ describe('parseTimeInput', () => {
 
   it('parses ISO 8601', () => {
     expect(parseTimeInput('2026-07-06T10:00:00Z', NOW)).toBe(Date.parse('2026-07-06T10:00:00Z'))
+    expect(parseTimeInput('2026-07-06T19:00:00+09:00', NOW)).toBe(Date.parse('2026-07-06T10:00:00Z'))
+  })
+
+  it('rejects absolute timestamps without an explicit time zone', () => {
+    expect(() => parseTimeInput('2026-07-06T10:00:00', NOW)).toThrow(/must include a time zone/)
+    expect(() => parseTimeInput('2026-07-06', NOW)).toThrow(/must include a time zone/)
   })
 
   it('parses epoch seconds and millis', () => {

@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
 import { getDatadogClient } from '../datadog/client.js'
 import { normalizeFacet, normalizeTimelineByFacet } from '../datadog/normalize.js'
+import { resolveRange } from '../datadog/time.js'
 import { registerPrefixedTool } from './registration.js'
 import { createErrorResponse, textResult } from './utils.js'
 
@@ -17,8 +18,11 @@ export function registerAggregateLogsTool(server: McpServer): void {
         'or as a timeseries when interval is set. Returns a text table for model-side analysis.',
       inputSchema: {
         query: z.string().default('*').describe('Datadog logs search query'),
-        from: z.string().default('now-15m').describe('Start time: Datadog time math or ISO 8601'),
-        to: z.string().default('now').describe('End time'),
+        from: z
+          .string()
+          .default('now-15m')
+          .describe('Start time: Datadog time math or ISO 8601 with a time zone (Z or offset)'),
+        to: z.string().default('now').describe('End time: time math or ISO 8601 with a time zone (Z or offset)'),
         groupBy: z
           .string()
           .optional()
@@ -47,6 +51,7 @@ export function registerAggregateLogsTool(server: McpServer): void {
       interval?: string
     }): Promise<CallToolResult> => {
       try {
+        resolveRange(from, to)
         const client = getDatadogClient()
         const facet = groupBy ?? 'status'
         if (interval) {

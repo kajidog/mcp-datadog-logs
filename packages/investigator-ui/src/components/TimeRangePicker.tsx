@@ -13,6 +13,7 @@ const PRESETS = [
 
 const ABSOLUTE = 'absolute'
 const RAW = 'raw'
+const DISPLAY_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'
 
 interface TimeRangePickerProps {
   from: string
@@ -115,7 +116,7 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
           <Input
             value={from}
             onChange={(e) => onChange(e.target.value, to)}
-            placeholder="now-4h または ISO"
+            placeholder="now-4h または ISO (Z/+09:00)"
             className="w-36 font-mono text-xs"
             aria-label="開始"
           />
@@ -129,6 +130,7 @@ export function TimeRangePicker({ from, to, onChange }: TimeRangePickerProps) {
           />
         </>
       )}
+      <span className="text-[11px] text-muted-foreground">表示: {DISPLAY_TIME_ZONE}</span>
     </div>
   )
 }
@@ -151,7 +153,11 @@ function isAbsoluteTime(value: string): boolean {
   if (value.trim().toLowerCase().startsWith('now')) {
     return false
   }
-  return !Number.isNaN(new Date(value).getTime())
+  return hasExplicitTimeZone(value) && !Number.isNaN(new Date(value).getTime())
+}
+
+function hasExplicitTimeZone(value: string): boolean {
+  return /T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
 }
 
 function resolveTimeInput(value: string): Date | null {
