@@ -261,7 +261,10 @@ export function Investigator() {
       data-display-mode={displayMode.displayMode}
       className={cn(
         'flex flex-col gap-3 p-3',
-        fullscreen ? 'h-svh min-h-0 overflow-y-auto md:overflow-hidden' : 'min-h-svh'
+        // Inline mode must not tie min-height to the viewport: the host sizes the
+        // iframe from our size-changed notifications, so a viewport-based minimum
+        // would ratchet the measured height up and never let it shrink back.
+        fullscreen && 'h-svh min-h-0 overflow-y-auto md:overflow-hidden'
       )}
     >
       <QueryBar
