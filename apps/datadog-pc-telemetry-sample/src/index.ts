@@ -338,7 +338,9 @@ function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem
   const { cpuWarnPercent, cpuErrorPercent, memoryWarnPercent, memoryErrorPercent } = config.thresholds
   const alerts = [
     ...(cpuPercent >= Math.min(cpuWarnPercent, cpuErrorPercent) ? [`high cpu usage (${cpuPercent}%)`] : []),
-    ...(memoryPercent >= Math.min(memoryWarnPercent, memoryErrorPercent) ? [`high memory usage (${memoryPercent}%)`] : []),
+    ...(memoryPercent >= Math.min(memoryWarnPercent, memoryErrorPercent)
+      ? [`high memory usage (${memoryPercent}%)`]
+      : []),
   ]
 
   return [
