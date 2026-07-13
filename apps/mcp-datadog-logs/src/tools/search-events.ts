@@ -12,7 +12,7 @@ const MAX_TITLE_LENGTH = 160
 const MAX_TAGS = 8
 const MAX_TAG_LENGTH = 60
 
-export function formatEventLine(event: RawEvent): string {
+export function formatEventLine(event: RawEvent, maxTags = MAX_TAGS): string {
   const attrs = event.attributes
   const inner = attrs?.attributes
   const rawTitle = inner?.title ?? attrs?.message ?? ''
@@ -26,11 +26,11 @@ export function formatEventLine(event: RawEvent): string {
     truncatedTitle,
   ]
   const tags = attrs?.tags ?? []
-  if (tags.length > 0) {
+  if (tags.length > 0 && maxTags > 0) {
     const shown = tags
-      .slice(0, MAX_TAGS)
+      .slice(0, maxTags)
       .map((tag) => (tag.length > MAX_TAG_LENGTH ? `${tag.slice(0, MAX_TAG_LENGTH)}…` : tag))
-    const more = tags.length > MAX_TAGS ? ` (+${tags.length - MAX_TAGS} more)` : ''
+    const more = tags.length > maxTags ? ` (+${tags.length - maxTags} more)` : ''
     parts.push(`| tags: ${shown.join(', ')}${more}`)
   }
   return parts.filter(Boolean).join(' ')
@@ -61,6 +61,13 @@ export function registerSearchEventsTool(server: McpServer): void {
           .default('now')
           .describe('End time: Datadog time math ("now") or ISO 8601 with a time zone (Z or offset)'),
         limit: z.number().int().min(1).max(100).default(25).describe('Max events to return'),
+        max_tags: z
+          .number()
+          .int()
+          .min(0)
+          .max(20)
+          .default(8)
+          .describe('Max tags per event line; 0 hides tags for a pure timeline'),
       },
       annotations: {
         readOnlyHint: true,
@@ -72,11 +79,13 @@ export function registerSearchEventsTool(server: McpServer): void {
       from,
       to,
       limit,
+      max_tags,
     }: {
       query: string
       from: string
       to: string
       limit: number
+      max_tags: number
     }): Promise<CallToolResult> => {
       try {
         resolveRange(from, to)
@@ -86,7 +95,7 @@ export function registerSearchEventsTool(server: McpServer): void {
           return textResult(`No events matched query "${query}" between ${from} and ${to}.`)
         }
         const header = `${events.length} events (query: ${query}, range: ${from} → ${to})`
-        return textResult(`${header}\n${events.map(formatEventLine).join('\n')}`)
+        return textResult(`${header}\n${events.map((event) => formatEventLine(event, max_tags)).join('\n')}`)
       } catch (error) {
         return createErrorResponse(error, 'events_read')
       }

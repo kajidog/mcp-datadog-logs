@@ -26,13 +26,30 @@ describe('formatInvestigationSummary', () => {
       rows: [fixtureRow('log-1', { message: 'line one\n  line two\ttabbed' }), fixtureRow('log-2')],
     })
     const withSamples = formatInvestigationSummary(result, VIEW_UUID, { sampleRows: 1 })
-    expect(withSamples).toContain('Sample logs (1 of 2 stored):')
+    expect(withSamples).toContain('Sample logs (1 of 2 stored, errors first):')
     expect(withSamples).toContain('line one line two tabbed')
     expect(withSamples).not.toContain('log-2)')
 
     const noSamples = formatInvestigationSummary(result, VIEW_UUID, { sampleRows: 0 })
     expect(noSamples).not.toContain('Sample logs')
     expect(noSamples).toContain('2 log rows stored in the session.')
+  })
+
+  it('picks error rows first and prefixes samples with their absolute row index', () => {
+    const result = fixtureResult({
+      rows: [
+        fixtureRow('log-1', { status: 'info', message: 'info row' }),
+        fixtureRow('log-2', { status: 'warn', message: 'warn row' }),
+        fixtureRow('log-3', { status: 'error', message: 'error row' }),
+      ],
+    })
+    const summary = formatInvestigationSummary(result, VIEW_UUID, { sampleRows: 2 })
+    const lines = summary.split('\n')
+    const sampleStart = lines.findIndex((line) => line.startsWith('Sample logs'))
+    expect(lines[sampleStart + 1]).toContain('[2]')
+    expect(lines[sampleStart + 1]).toContain('error row')
+    expect(lines[sampleStart + 2]).toContain('[1]')
+    expect(lines[sampleStart + 2]).toContain('warn row')
   })
 
   it('truncates long sample messages', () => {
@@ -57,8 +74,8 @@ describe('formatInvestigationSummary', () => {
     })
     const summary = formatInvestigationSummary(result, VIEW_UUID, { topPatterns: 5 })
     expect(summary).toContain('Top patterns (of 4 fetched rows):')
-    expect(summary).toContain('3 (75%) Payment failed for <*>')
-    expect(summary).toContain(`Cache ${'y'.repeat(114)}…`)
+    expect(summary).toContain('#1 3 (75%) Payment failed for <*>')
+    expect(summary).toContain(`#2 1 (25%) Cache ${'y'.repeat(114)}…`)
     expect(summary).not.toContain('rowIds')
     expect(summary).not.toContain('y'.repeat(115))
 

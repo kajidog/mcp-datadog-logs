@@ -81,3 +81,53 @@ describe('datadog_search_logs attributes parameter', () => {
     expect(bare).not.toContain('|')
   })
 })
+
+describe('datadog_search_logs dedupe parameter', () => {
+  beforeEach(() => {
+    searchLogs.mockReset()
+  })
+
+  function logWithMessage(id: string, message: string): RawLog {
+    return {
+      id,
+      attributes: {
+        timestamp: '2026-07-11T09:20:14Z',
+        status: 'error',
+        service: 'web-store',
+        message,
+        attributes: {},
+      },
+    }
+  }
+
+  it('groups the fetched page into one line per message pattern', async () => {
+    searchLogs.mockResolvedValue({
+      logs: [
+        logWithMessage('a', 'Payment failed for order 42'),
+        logWithMessage('b', 'Payment failed for order 43'),
+        logWithMessage('c', 'Cache miss'),
+      ],
+      nextCursor: 'page-2',
+    })
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_search_logs
+    const result = await tool.handler(
+      { query: '*', from: 'now-15m', to: 'now', limit: 20, sort: '-timestamp', dedupe: true },
+      {}
+    )
+
+    const text = result.content[0].text
+    const lines = text.split('\n')
+    expect(lines[0]).toBe('3 logs in 2 patterns (query: *, range: now-15m → now)')
+    expect(lines[1]).toBe(
+      '2x Payment failed for order <*> — e.g. 2026-07-11T09:20:14.000Z web-store: Payment failed for order 42'
+    )
+    expect(lines[2]).toContain('1x Cache miss')
+    expect(text).toContain('nextCursor: page-2')
+  })
+
+  it('keeps the per-log output unchanged when dedupe is off', async () => {
+    const line = await runSearch([log({})], { dedupe: false })
+    expect(line).toBe('2026-07-11T09:20:14.000Z [ERROR] web-store — Payment failed')
+  })
+})

@@ -96,7 +96,8 @@ describe('datadog_run_investigation', () => {
     const uuid = text.match(new RegExp(VIEW_UUID_PATTERN))?.[1]
     expect(uuid).toBeDefined()
     expect(getSession(uuid as string)?.result.rows).toHaveLength(4)
-    expect(text).toContain('Sample logs (2 of 4 stored):')
+    expect(text).toContain('Sample logs (2 of 4 stored, errors first):')
+    expect(text).toContain('datadog_get_session_logs')
     expect(text).toContain('datadog_investigate_logs')
     // compact: the summary must not inline all stored rows
     expect(text).not.toContain('log-3')

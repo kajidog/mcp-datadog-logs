@@ -101,7 +101,9 @@ export function registerRunInvestigationTool(server: McpServer): void {
         const summary = formatInvestigationSummary(sessionResult(stored.session), stored.viewUUID, { sampleRows })
         return textResult(
           `${summary}\n` +
-            'Call this tool again with the same viewUUID to refine or load more, ' +
+            'Drill down without new Datadog calls: datadog_get_session_logs with this viewUUID ' +
+            '(filters: status/service/pattern=N/contains; row=N or logId for one full log). ' +
+            'Call this tool again with the same viewUUID to refine or load more (cursor), ' +
             'or call datadog_investigate_logs with this viewUUID to display it to the user.'
         )
       } catch (error) {
