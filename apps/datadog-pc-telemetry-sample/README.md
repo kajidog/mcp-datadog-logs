@@ -78,6 +78,16 @@ npm start
 
 - Logs Explorer で `service:datadog-pc-telemetry-sample env:dev`
 
+ログの `status` は使用率から決まります（閾値は環境変数で変更可能）。
+
+| status | 条件（デフォルト） |
+|---|---|
+| `error` | CPU >= `CPU_ERROR_PERCENT` (90%) または memory >= `MEMORY_ERROR_PERCENT` (95%) |
+| `warn` | CPU >= `CPU_WARN_PERCENT` (70%) または memory >= `MEMORY_WARN_PERCENT` (85%) |
+| `info` | 上記以外 |
+
+`warn` / `error` のときは message 末尾に理由（例: `(high cpu usage (92.5%))`）が付きます。
+
 送信成功時の出力例:
 
 ```text
@@ -98,6 +108,10 @@ Datadog 側の表示には少し遅延が出ることがあります。
 | `DD_HOSTNAME` | no | `os.hostname()` | metrics/logs に紐づける host 名 |
 | `DD_TAGS` | no | - | 追加 tag。例: `team:platform,owner:local-dev` |
 | `METRIC_PREFIX` | no | `sample.pc` | custom metric 名の prefix |
+| `CPU_WARN_PERCENT` | no | `70` | ログ `status` を `warn` にする CPU 使用率の閾値 (%) |
+| `CPU_ERROR_PERCENT` | no | `90` | ログ `status` を `error` にする CPU 使用率の閾値 (%) |
+| `MEMORY_WARN_PERCENT` | no | `85` | ログ `status` を `warn` にするメモリ使用率の閾値 (%) |
+| `MEMORY_ERROR_PERCENT` | no | `95` | ログ `status` を `error` にするメモリ使用率の閾値 (%) |
 
 ## CLI オプション
 

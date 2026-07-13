@@ -12,6 +12,13 @@ type CliOptions = {
   samples: number
 }
 
+type StatusThresholds = {
+  cpuWarnPercent: number
+  cpuErrorPercent: number
+  memoryWarnPercent: number
+  memoryErrorPercent: number
+}
+
 type Config = {
   apiKey?: string
   env: string
@@ -20,6 +27,7 @@ type Config = {
   service: string
   site: string
   tags: string[]
+  thresholds: StatusThresholds
 }
 
 type CpuSnapshot = {
@@ -167,7 +175,26 @@ function getConfig(): Config {
     service,
     site,
     tags,
+    thresholds: {
+      cpuWarnPercent: parsePercentEnv('CPU_WARN_PERCENT', 70),
+      cpuErrorPercent: parsePercentEnv('CPU_ERROR_PERCENT', 90),
+      memoryWarnPercent: parsePercentEnv('MEMORY_WARN_PERCENT', 85),
+      memoryErrorPercent: parsePercentEnv('MEMORY_ERROR_PERCENT', 95),
+    },
   }
+}
+
+function parsePercentEnv(name: string, defaultValue: number): number {
+  const raw = process.env[name]
+  if (raw === undefined || raw.trim() === '') {
+    return defaultValue
+  }
+
+  const parsed = Number.parseFloat(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative number, got: ${raw}`)
+  }
+  return parsed
 }
 
 function normalizeSite(input: string): string {
@@ -291,8 +318,30 @@ function buildMetricPayload(telemetry: PcTelemetry, config: Config): v2.MetricPa
   }
 }
 
+type LogStatus = 'info' | 'warn' | 'error'
+
+function deriveLogStatus(cpuPercent: number, memoryPercent: number, thresholds: StatusThresholds): LogStatus {
+  if (cpuPercent >= thresholds.cpuErrorPercent || memoryPercent >= thresholds.memoryErrorPercent) {
+    return 'error'
+  }
+  if (cpuPercent >= thresholds.cpuWarnPercent || memoryPercent >= thresholds.memoryWarnPercent) {
+    return 'warn'
+  }
+  return 'info'
+}
+
 function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem[] {
   const metrics = Object.fromEntries(telemetry.metrics.map((metric) => [metric.name, metric.value]))
+  const cpuPercent = metrics['cpu.usage_percent'] ?? 0
+  const memoryPercent = metrics['memory.used_percent'] ?? 0
+  const status = deriveLogStatus(cpuPercent, memoryPercent, config.thresholds)
+  const { cpuWarnPercent, cpuErrorPercent, memoryWarnPercent, memoryErrorPercent } = config.thresholds
+  const alerts = [
+    ...(cpuPercent >= Math.min(cpuWarnPercent, cpuErrorPercent) ? [`high cpu usage (${cpuPercent}%)`] : []),
+    ...(memoryPercent >= Math.min(memoryWarnPercent, memoryErrorPercent)
+      ? [`high memory usage (${memoryPercent}%)`]
+      : []),
+  ]
 
   return [
     {
@@ -304,6 +353,7 @@ function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem
         `cpu=${metrics['cpu.usage_percent']}%`,
         `memory=${metrics['memory.used_percent']}%`,
         `load1=${metrics['load.1']}`,
+        ...(alerts.length > 0 ? [`(${alerts.join(', ')})`] : []),
       ].join(' '),
       service: config.service,
       additionalProperties: {
@@ -312,7 +362,7 @@ function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem
         metric_prefix: config.metricPrefix,
         platform: telemetry.platform,
         release: telemetry.release,
-        status: 'info',
+        status,
         timestamp: new Date(telemetry.timestamp * 1000).toISOString(),
       },
     },
