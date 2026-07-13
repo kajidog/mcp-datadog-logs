@@ -214,7 +214,7 @@ export function registerGetTraceTool(server: McpServer): void {
         }
         return textResult(formatTrace(trace_id, spans, truncated))
       } catch (error) {
-        return createErrorResponse(error)
+        return createErrorResponse(error, 'apm_read')
       }
     }
   )

@@ -34,7 +34,8 @@ needed).
 ## Setup
 
 Requires Node.js >= 20 and a Datadog API key + application key
-(the application key needs the `logs_read_data` scope).
+(the application key needs the `logs_read_data` scope; add `apm_read` for
+`datadog_get_trace` and `events_read` for `datadog_search_events`).
 
 ### Claude Code
 
@@ -83,7 +84,7 @@ were created. Japan is `ap1.datadoghq.com`; US1 is `datadoghq.com`.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DD_API_KEY` | ✅ | — | Datadog API key |
-| `DD_APP_KEY` | ✅ | — | Datadog application key from the same org/site as `DD_API_KEY` (`logs_read_data` scope) |
+| `DD_APP_KEY` | ✅ | — | Datadog application key from the same org/site as `DD_API_KEY` (`logs_read_data` scope; `apm_read` / `events_read` for the trace and events tools) |
 | `DD_SITE` | | `datadoghq.com` | Datadog site, e.g. `ap1.datadoghq.com`, `datadoghq.eu`, `us5.datadoghq.com` |
 | `DD_LOGS_INDEXES` | | all | Comma-separated log indexes to search |
 | `MCP_DATADOG_EXPORT_DIR` | | `~/Downloads` (or cwd) | Where exported reports / data files are written |

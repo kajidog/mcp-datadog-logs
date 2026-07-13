@@ -192,6 +192,18 @@ describe('datadog_get_trace', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('must include a time zone')
   })
+
+  it('names the apm_read scope on 403 responses', async () => {
+    listTraceSpans.mockRejectedValue({ code: 403, message: 'Forbidden' })
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_get_trace
+
+    const result = await tool.handler({ trace_id: 't1', from: 'now-1h', to: 'now' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('apm_read')
+    expect(result.content[0].text).not.toContain('logs_read_data')
+  })
 })
 
 describe('formatTrace', () => {

@@ -88,7 +88,7 @@ export function registerSearchEventsTool(server: McpServer): void {
         const header = `${events.length} events (query: ${query}, range: ${from} → ${to})`
         return textResult(`${header}\n${events.map(formatEventLine).join('\n')}`)
       } catch (error) {
-        return createErrorResponse(error)
+        return createErrorResponse(error, 'events_read')
       }
     }
   )

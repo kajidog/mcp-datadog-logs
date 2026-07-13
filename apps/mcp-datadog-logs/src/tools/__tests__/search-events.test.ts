@@ -104,4 +104,16 @@ describe('datadog_search_events', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('must include a time zone')
   })
+
+  it('names the events_read scope on 403 responses', async () => {
+    searchEvents.mockRejectedValue({ code: 403, message: 'Forbidden' })
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_search_events
+
+    const result = await tool.handler({ query: '*', from: 'now-1d', to: 'now', limit: 25 })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('events_read')
+    expect(result.content[0].text).not.toContain('logs_read_data')
+  })
 })

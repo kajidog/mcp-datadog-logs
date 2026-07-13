@@ -193,15 +193,19 @@ export function resetDatadogClient(): void {
   cached = undefined
 }
 
-/** Maps Datadog API failures to actionable messages for the model/user. */
-export function describeDatadogError(error: unknown): string {
+/**
+ * Maps Datadog API failures to actionable messages for the model/user.
+ * `requiredScope` names the application-key scope the failing API needs
+ * (logs tools: logs_read_data, spans: apm_read, events: events_read).
+ */
+export function describeDatadogError(error: unknown, requiredScope = 'logs_read_data'): string {
   const err = error as { code?: number; message?: string } | undefined
   const code = err?.code
   const message = err?.message ?? String(error)
   if (code === 403) {
     return (
       'Datadog API returned 403 Forbidden. Check that DD_API_KEY and DD_APP_KEY are valid, ' +
-      'the application key has the logs_read_data scope, and DD_SITE matches your Datadog region.'
+      `the application key has the ${requiredScope} scope, and DD_SITE matches your Datadog region.`
     )
   }
   if (code === 401) {
