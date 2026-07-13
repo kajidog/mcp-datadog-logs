@@ -33,6 +33,42 @@ export interface RawLog {
   }
 }
 
+/** Structural subset of the Datadog SDK Span type (v2.SpansApi). */
+export interface RawSpan {
+  id?: string
+  attributes?: {
+    spanId?: string
+    parentId?: string
+    traceId?: string
+    service?: string
+    resourceName?: string
+    type?: string
+    env?: string
+    host?: string
+    startTimestamp?: Date | string
+    endTimestamp?: Date | string
+    tags?: string[]
+    custom?: Record<string, unknown>
+    attributes?: Record<string, unknown>
+  }
+}
+
+/** Structural subset of the Datadog SDK EventResponse type (v2.EventsApi). */
+export interface RawEvent {
+  id?: string
+  attributes?: {
+    timestamp?: Date | string
+    message?: string
+    tags?: string[]
+    attributes?: {
+      title?: string
+      status?: string
+      service?: string
+      sourceTypeName?: string
+    } & Record<string, unknown>
+  }
+}
+
 export interface RawTimeseriesPoint {
   time?: Date | string
   value?: number
@@ -43,7 +79,7 @@ export interface RawAggregateBucket {
   computes?: Record<string, RawTimeseriesPoint[] | number | string | undefined>
 }
 
-function toIso(value: Date | string | undefined): string {
+export function toIso(value: Date | string | undefined): string {
   if (value === undefined) {
     return ''
   }
@@ -82,6 +118,51 @@ export function normalizeLogRow(raw: RawLog, caps: NormalizeCaps = DEFAULT_CAPS)
 function extractHostFromAttributes(attributes: Record<string, unknown> | undefined): string | undefined {
   const host = attributes?.host
   return typeof host === 'string' ? host : undefined
+}
+
+/**
+ * Resolves the APM trace id from a log's custom attribute bag. Datadog logs
+ * carry it as `trace_id` (standard remapper), a flattened `dd.trace_id` key,
+ * or nested under `dd`.
+ */
+export function extractTraceId(attributes: Record<string, unknown> | undefined): string | undefined {
+  if (!attributes) {
+    return undefined
+  }
+  const dd = attributes.dd
+  const candidate =
+    attributes.trace_id ??
+    attributes['dd.trace_id'] ??
+    (typeof dd === 'object' && dd !== null ? (dd as Record<string, unknown>).trace_id : undefined)
+  return typeof candidate === 'string' || typeof candidate === 'number' ? String(candidate) : undefined
+}
+
+/**
+ * Dot-path lookup into a log attribute bag. A literal key containing dots
+ * wins over path traversal because Datadog often stores attributes flattened
+ * (e.g. "http.status_code" as a single key).
+ */
+export function lookupAttribute(bag: Record<string, unknown> | undefined, path: string): unknown {
+  if (!bag) {
+    return undefined
+  }
+  if (path in bag) {
+    return bag[path]
+  }
+  let current: unknown = bag
+  for (const segment of path.split('.')) {
+    if (current === null || typeof current !== 'object') {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+/** Compact stringification for key=value output appended to log lines. */
+export function formatAttributeValue(value: unknown, maxLength = 100): string {
+  const text = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text
 }
 
 /**

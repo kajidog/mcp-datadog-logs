@@ -11,7 +11,8 @@ Usage:
 
 Environment variables:
   DD_API_KEY               Datadog API key (required)
-  DD_APP_KEY               Datadog application key with logs_read_data scope (required)
+  DD_APP_KEY               Datadog application key with logs_read_data scope (required);
+                           add apm_read / events_read for the trace and events tools
   DD_SITE                  Datadog site (default: datadoghq.com; e.g. ap1.datadoghq.com, datadoghq.eu)
   DD_LOGS_INDEXES          Comma-separated log indexes to search (default: all)
   MCP_DATADOG_EXPORT_DIR   Directory for exported HTML reports (default: ~/Downloads or cwd)

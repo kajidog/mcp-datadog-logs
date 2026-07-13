@@ -46,7 +46,7 @@ MCP hosts forward only tool-result *text* to the embedded app (no `structuredCon
 - `report/` — self-contained HTML report export. Log content is untrusted: every dynamic value must pass through `escapeHtml`. `styles.ts`/`script.ts` are static inline CSS/JS strings — never interpolate user data into them, and the JS must not contain a literal `</script`.
 
 ### Config
-Server credentials come from env: `DD_API_KEY`, `DD_APP_KEY` (needs `logs_read_data` scope), `DD_SITE` (e.g. `ap1.datadoghq.com` for Japan), optional `DD_LOGS_INDEXES`.
+Server credentials come from env: `DD_API_KEY`, `DD_APP_KEY` (needs `logs_read_data` scope; `apm_read` / `events_read` for the trace and events tools — see `docs/datadog-permissions.md`), `DD_SITE` (e.g. `ap1.datadoghq.com` for Japan), optional `DD_LOGS_INDEXES`.
 
 ## Style
 
