@@ -78,6 +78,16 @@ npm start
 
 - Logs Explorer で `service:datadog-pc-telemetry-sample env:dev`
 
+ログの `status` は使用率から決まります。
+
+| status | 条件 |
+|---|---|
+| `error` | CPU >= 90% または memory >= 95% |
+| `warn` | CPU >= 70% または memory >= 85% |
+| `info` | 上記以外 |
+
+`warn` / `error` のときは message 末尾に理由（例: `(high cpu usage (92.5%))`）が付きます。
+
 送信成功時の出力例:
 
 ```text

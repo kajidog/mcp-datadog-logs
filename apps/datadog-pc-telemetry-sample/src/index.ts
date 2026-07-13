@@ -291,8 +291,32 @@ function buildMetricPayload(telemetry: PcTelemetry, config: Config): v2.MetricPa
   }
 }
 
+const CPU_WARN_PERCENT = 70
+const CPU_ERROR_PERCENT = 90
+const MEMORY_WARN_PERCENT = 85
+const MEMORY_ERROR_PERCENT = 95
+
+type LogStatus = 'info' | 'warn' | 'error'
+
+function deriveLogStatus(cpuPercent: number, memoryPercent: number): LogStatus {
+  if (cpuPercent >= CPU_ERROR_PERCENT || memoryPercent >= MEMORY_ERROR_PERCENT) {
+    return 'error'
+  }
+  if (cpuPercent >= CPU_WARN_PERCENT || memoryPercent >= MEMORY_WARN_PERCENT) {
+    return 'warn'
+  }
+  return 'info'
+}
+
 function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem[] {
   const metrics = Object.fromEntries(telemetry.metrics.map((metric) => [metric.name, metric.value]))
+  const cpuPercent = metrics['cpu.usage_percent'] ?? 0
+  const memoryPercent = metrics['memory.used_percent'] ?? 0
+  const status = deriveLogStatus(cpuPercent, memoryPercent)
+  const alerts = [
+    ...(cpuPercent >= CPU_WARN_PERCENT ? [`high cpu usage (${cpuPercent}%)`] : []),
+    ...(memoryPercent >= MEMORY_WARN_PERCENT ? [`high memory usage (${memoryPercent}%)`] : []),
+  ]
 
   return [
     {
@@ -304,6 +328,7 @@ function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem
         `cpu=${metrics['cpu.usage_percent']}%`,
         `memory=${metrics['memory.used_percent']}%`,
         `load1=${metrics['load.1']}`,
+        ...(alerts.length > 0 ? [`(${alerts.join(', ')})`] : []),
       ].join(' '),
       service: config.service,
       additionalProperties: {
@@ -312,7 +337,7 @@ function buildLogPayload(telemetry: PcTelemetry, config: Config): v2.HTTPLogItem
         metric_prefix: config.metricPrefix,
         platform: telemetry.platform,
         release: telemetry.release,
-        status: 'info',
+        status,
         timestamp: new Date(telemetry.timestamp * 1000).toISOString(),
       },
     },
