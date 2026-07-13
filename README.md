@@ -64,13 +64,21 @@ npm run dev -- --samples=60 --interval=10
 
 Datadog Logs を MCP クライアントから調査するためのサーバーです。
 
-MCP Apps 対応クライアントでは、タイムライン・ファセット・メッセージパターン付きの調査画面が開きます（スクリーンショットはモックデータ）。
+MCP Apps 対応クライアントでは、タイムライン・ファセット・メッセージパターン付きの調査画面が開きます（スクリーンショットはすべてモックデータ）。
 
 ![調査画面。タイムラインチャート、サービス/ステータス/ホストのファセット、メッセージパターン、ログテーブルを表示](./docs/images/investigator-ui.png)
 
-ログ行をクリックすると raw ログの JSON 詳細を展開できます。
+ダークモードにも対応しており、ログ行をクリックすると raw ログの JSON 詳細を展開できます。
 
-![ログ詳細。ログ行を展開して raw ログの JSON を表示](./docs/images/investigator-ui-detail.png)
+| ダークモード | ログ詳細（raw JSON） |
+|---|---|
+| ![ダークモードの調査画面](./docs/images/investigator-ui-dark.png) | ![ログ行を展開して raw ログの JSON を表示](./docs/images/investigator-ui-detail.png) |
+
+エクスポートされる HTML レポートは自己完結の単一ファイルで、テーマ切替（Auto / Light / Dark）とブラウザ単体でのフィルタ操作に対応しています。
+
+| HTML レポート（ライト） | HTML レポート（ダーク） |
+|---|---|
+| ![エクスポートされた HTML レポート（ライトテーマ）](./docs/images/report-light.png) | ![エクスポートされた HTML レポート（ダークテーマ）](./docs/images/report-dark.png) |
 
 できること:
 
