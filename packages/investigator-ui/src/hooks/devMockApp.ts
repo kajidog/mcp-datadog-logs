@@ -1,4 +1,11 @@
-import type { InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
+import type {
+  EventMarker,
+  InvestigationResult,
+  LogPattern,
+  LogRow,
+  MetricSeries,
+  TraceCandidate,
+} from '@kajidog/investigation-shared'
 import type { App } from '@modelcontextprotocol/ext-apps'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
@@ -31,7 +38,7 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
       },
     }
   })
-  const rows = Array.from({ length: 50 }, (_, i) => ({
+  const rows: LogRow[] = Array.from({ length: 50 }, (_, i) => ({
     id: `mock-log-${i}`,
     timestamp: new Date(now - i * 90_000).toISOString(),
     status: (['error', 'warn', 'info', 'info', 'info', 'debug'] as const)[i % 6],
@@ -39,6 +46,8 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
     host: HOSTS[i % HOSTS.length],
     message: MESSAGES[i % MESSAGES.length],
     tags: ['env:prod', `team:core-${i % 3}`],
+    // Error rows carry a trace id so the trace chip / candidates render in dev.
+    ...(i % 6 === 0 ? { traceId: `${4200000000000000 + Math.floor(i / 6)}` } : {}),
   }))
   return {
     params: { query, from, to },
@@ -73,7 +82,94 @@ function mockResult(query: string, from: string, to: string): InvestigationResul
       '直前のデプロイ (v2.31.0) と時間帯が一致しており、DB コネクションプール枯渇の可能性が高い。',
     fetchedAt: new Date().toISOString(),
     resolvedRange: { fromMs: now - buckets * stepMs, toMs: now },
+    events: mockEvents(now, buckets, stepMs),
+    metrics: mockMetrics(now, buckets, stepMs),
+    traceCandidates: mockTraceCandidates(rows),
+    notices: ['Metric query "avg:system.memory.pct_usable{*}" failed: (mock notice for dev layout check)'],
   }
+}
+
+function mockEvents(now: number, buckets: number, stepMs: number): EventMarker[] {
+  return [
+    {
+      id: 'mock-event-deploy',
+      // Right at the error-spike buckets (i = 15/16 in the timeline above).
+      time: new Date(now - (buckets - 15) * stepMs).toISOString(),
+      kind: 'deploy',
+      title: 'Deployed payments v2.31.0 (github)',
+      status: 'info',
+      source: 'github',
+      tags: ['service:payments', 'env:prod'],
+    },
+    {
+      id: 'mock-event-alert',
+      time: new Date(now - (buckets - 18) * stepMs).toISOString(),
+      kind: 'alert',
+      title: '[Triggered] payments error rate is above 5%',
+      status: 'error',
+      source: 'alert',
+      tags: ['monitor', 'service:payments'],
+    },
+    {
+      id: 'mock-event-other',
+      time: new Date(now - (buckets - 5) * stepMs).toISOString(),
+      kind: 'other',
+      title: 'Feature flag "new-checkout" enabled for 25% of traffic',
+      source: 'custom',
+    },
+  ]
+}
+
+function mockMetrics(now: number, buckets: number, stepMs: number): MetricSeries[] {
+  const points = (base: number, spikeAt: number, spikeScale: number) =>
+    Array.from({ length: buckets }, (_, i) => ({
+      time: new Date(now - (buckets - i) * stepMs).toISOString(),
+      value:
+        i === 10
+          ? null // gap so connectNulls=false rendering is visible in dev
+          : Math.round((base + 10 * Math.sin(i / 3) + (i >= spikeAt ? spikeScale * (i - spikeAt) : 0)) * 10) / 10,
+    }))
+  const stats = (pts: Array<{ value: number | null }>) => {
+    const values = pts.map((p) => p.value).filter((v): v is number => v !== null)
+    return {
+      min: Math.min(...values),
+      max: Math.max(...values),
+      avg: Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10,
+      last: values[values.length - 1] ?? null,
+    }
+  }
+  const cpu = points(45, 15, 8)
+  const latency = points(120, 15, 60)
+  return [
+    {
+      query: 'avg:system.cpu.user{service:payments}',
+      metric: 'avg:system.cpu.user',
+      scope: 'service:payments',
+      unit: '%',
+      points: cpu,
+      stats: stats(cpu),
+    },
+    {
+      query: 'avg:trace.express.request.duration{service:payments}',
+      metric: 'avg:trace.express.request.duration',
+      scope: 'service:payments',
+      unit: 'ms',
+      points: latency,
+      stats: stats(latency),
+    },
+  ]
+}
+
+function mockTraceCandidates(rows: LogRow[]): TraceCandidate[] {
+  const withTrace = rows.filter((row) => row.traceId)
+  return withTrace.slice(0, 3).map((row) => ({
+    traceId: row.traceId ?? '',
+    count: 5,
+    errorCount: 4,
+    firstSeen: row.timestamp,
+    services: [row.service ?? 'payments'],
+    sampleMessage: row.message,
+  }))
 }
 
 /** Same shape the server produces: rows grouped by message template, most frequent first. */

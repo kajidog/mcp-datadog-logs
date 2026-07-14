@@ -19,6 +19,9 @@ const DARK_TOKENS = `
   --status-warn: #fab219;
   --status-info: #3987e5;
   --status-debug: #898781;
+  --event-deploy: #a371f7;
+  --event-alert: #f0713a;
+  --event-other: #898781;
   --code-bg: #262624;
   --accent: #3987e5;
 `
@@ -37,6 +40,9 @@ export const REPORT_CSS = `
   --status-warn: #fab219;
   --status-info: #2a78d6;
   --status-debug: #898781;
+  --event-deploy: #8250df;
+  --event-alert: #cf4a0c;
+  --event-other: #898781;
   --code-bg: #f0efec;
   --accent: #2a78d6;
 }
@@ -240,6 +246,41 @@ tr:last-child td { border-bottom: none; }
   overflow-x: auto;
   font-size: 12px;
   line-height: 1.45;
+}
+.event-badge {
+  display: inline-block;
+  min-width: 46px;
+  text-align: center;
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+.event-badge.deploy { background: var(--event-deploy); }
+.event-badge.alert { background: var(--event-alert); }
+.event-badge.other { background: var(--event-other); }
+.events td.time { white-space: nowrap; color: var(--text-secondary); font-size: 12px; }
+.events td.tags { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.metric-card .name { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.metric-card .scope { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.metric-card .stats {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.metric-card svg { display: block; width: 100%; height: auto; margin-top: 8px; }
+.notices { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
+.notices li { margin: 2px 0; }
+.trace-chip {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 footer { margin-top: 40px; color: var(--text-muted); font-size: 12px; }
 @media print {

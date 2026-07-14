@@ -47,6 +47,24 @@ describe('session persistence', () => {
     expect(restored?.rawById.get('log-2')).toEqual({ id: 'log-2' })
   })
 
+  it('loads version-1 files written before the cross-source fields existed', () => {
+    setSession(VIEW_UUID, fixtureSession())
+    const path = join(dir, `${VIEW_UUID}.json`)
+    const file = JSON.parse(readFileSync(path, 'utf-8'))
+    // Simulate a pre-cross-source file: strip the optional fields entirely.
+    const { events: _e, metrics: _m, traceCandidates: _t, notices: _n, ...legacyResult } = file.result
+    writeFileSync(path, JSON.stringify({ ...file, result: legacyResult }), 'utf-8')
+    clearSessions()
+
+    const restored = getSession(VIEW_UUID)
+    expect(restored).toBeDefined()
+    expect(restored?.result.events).toBeUndefined()
+    expect(restored?.result.metrics).toBeUndefined()
+    expect(restored?.result.traceCandidates).toBeUndefined()
+    expect(restored?.result.notices).toBeUndefined()
+    expect(restored?.result.rows.map((r) => r.id)).toEqual(['log-1', 'log-2', 'log-3', 'log-4'])
+  })
+
   it('returns undefined for corrupt files and schema version mismatches', () => {
     writeFileSync(join(dir, `${VIEW_UUID}.json`), 'not json{', 'utf-8')
     expect(getSession(VIEW_UUID)).toBeUndefined()

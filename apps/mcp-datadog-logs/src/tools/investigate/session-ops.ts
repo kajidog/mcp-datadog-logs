@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { InvestigationParams, InvestigationResult } from '@kajidog/investigation-shared'
 import { extractLogPatterns } from '../../analysis/patterns.js'
 import { getDatadogClient } from '../../datadog/client.js'
-import { runInvestigation } from '../../datadog/investigation.js'
+import { extractTraceCandidates, runInvestigation } from '../../datadog/investigation.js'
 import { getSession, type InvestigationSession, setSession } from './runtime.js'
 
 export interface StoreRunOptions {
@@ -41,6 +41,11 @@ export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<S
     limit: opts.params.limit ?? loadMoreParams?.limit,
     cursor: opts.params.cursor,
     title,
+    // Cross-source settings are inherited from the stored session on any
+    // update (not just load-more) so UI re-runs keep the configured metrics.
+    includeEvents: opts.params.includeEvents ?? existing?.result.params.includeEvents,
+    eventsQuery: opts.params.eventsQuery ?? existing?.result.params.eventsQuery,
+    metricsQueries: opts.params.metricsQueries ?? existing?.result.params.metricsQueries,
   }
   const { result, rawById } = await runInvestigation(client, params)
 
@@ -52,9 +57,27 @@ export async function runAndStoreInvestigation(opts: StoreRunOptions): Promise<S
         rawById.set(id, raw)
       }
     }
+    // Load-more skips the events/metrics fetches (frozen window, unchanged
+    // data) — carry the previous page's results forward instead.
+    if (existing.result.events && !result.events) {
+      result.events = existing.result.events
+    }
+    if (existing.result.metrics && !result.metrics) {
+      result.metrics = existing.result.metrics
+    }
+    if (existing.result.notices && !result.notices) {
+      result.notices = existing.result.notices
+    }
   }
-  // After the load-more merge so patterns always reflect every stored row.
+  // After the load-more merge so patterns and trace candidates always
+  // reflect every stored row.
   result.patterns = extractLogPatterns(result.rows)
+  const traceCandidates = extractTraceCandidates(result.rows)
+  if (traceCandidates.length > 0) {
+    result.traceCandidates = traceCandidates
+  } else {
+    delete result.traceCandidates
+  }
 
   // Reuse a passed-but-evicted viewUUID so callers keep a stable handle; the
   // session is simply recreated (previous rows/findings are gone).

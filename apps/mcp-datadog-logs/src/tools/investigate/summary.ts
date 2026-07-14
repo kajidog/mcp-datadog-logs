@@ -1,4 +1,5 @@
-import type { InvestigationResult, LogRow } from '@kajidog/investigation-shared'
+import type { EventMarker, InvestigationResult, LogRow, TimelineBucket } from '@kajidog/investigation-shared'
+import { formatMetricStatsLine } from '../query-metrics.js'
 
 export interface SummaryOptions {
   /** Sample log lines to inline (0 = none) */
@@ -45,6 +46,43 @@ export function formatInvestigationSummary(
     lines.push(`${facet.facet}: ${top}${more}${other}`)
   }
 
+  const events = result.events ?? []
+  if (events.length > 0) {
+    const shown = events.slice(0, 5)
+    const rest = events.length - shown.length
+    lines.push(`Events in window (${events.length})${rest > 0 ? `, first ${shown.length}` : ''}:`)
+    const nearSpike = eventsNearErrorSpike(events, result.timeline)
+    for (const event of shown) {
+      lines.push(`  ${formatEventMarkerLine(event)}${nearSpike.has(event.id) ? ' (near error spike)' : ''}`)
+    }
+  }
+
+  const metrics = result.metrics ?? []
+  if (metrics.length > 0) {
+    const shown = metrics.slice(0, 6)
+    const rest = metrics.length - shown.length
+    lines.push(`Metrics${rest > 0 ? ` (${shown.length} of ${metrics.length} series)` : ''}:`)
+    for (const series of shown) {
+      lines.push(`  ${formatMetricStatsLine(series)}`)
+    }
+  }
+
+  const traceCandidates = result.traceCandidates ?? []
+  if (traceCandidates.length > 0) {
+    lines.push('Trace candidates (from stored rows):')
+    for (const candidate of traceCandidates) {
+      const services = candidate.services.length > 0 ? ` services=${candidate.services.join(',')}` : ''
+      lines.push(
+        `  ${candidate.traceId} — ${candidate.count} rows (${candidate.errorCount} errors)${services}` +
+          ` → datadog_get_trace trace_id=${candidate.traceId}`
+      )
+    }
+  }
+
+  for (const notice of result.notices ?? []) {
+    lines.push(`Note: ${notice}`)
+  }
+
   const patterns = result.patterns ?? []
   if (topPatterns > 0 && patterns.length > 0) {
     const shown = patterns.slice(0, topPatterns)
@@ -75,6 +113,46 @@ export function formatInvestigationSummary(
     lines.push(`nextCursor: ${result.nextCursor}`)
   }
   return lines.join('\n')
+}
+
+function formatEventMarkerLine(event: EventMarker): string {
+  const parts = [event.time, `[${event.kind}]`, event.source ? `${event.source} —` : undefined, event.title]
+  return parts.filter(Boolean).join(' ')
+}
+
+/**
+ * Ids of events within one timeline interval of the bucket with the most
+ * errors — the "what changed right around the spike" callout.
+ */
+function eventsNearErrorSpike(events: EventMarker[], timeline: TimelineBucket[]): Set<string> {
+  if (timeline.length === 0) {
+    return new Set()
+  }
+  let peak: TimelineBucket | undefined
+  let peakErrors = 0
+  for (const bucket of timeline) {
+    const errors = bucket.counts.error ?? 0
+    if (errors > peakErrors) {
+      peakErrors = errors
+      peak = bucket
+    }
+  }
+  if (!peak) {
+    return new Set()
+  }
+  const bucketMs =
+    timeline.length > 1 ? new Date(timeline[1].time).getTime() - new Date(timeline[0].time).getTime() : 5 * 60 * 1000
+  const peakMs = new Date(peak.time).getTime()
+  const near = new Set<string>()
+  for (const event of events) {
+    const eventMs = new Date(event.time).getTime()
+    // Bucket time is the interval start: the spike spans [peak, peak+bucket],
+    // and we include one interval of slack on both sides.
+    if (!Number.isNaN(eventMs) && eventMs >= peakMs - bucketMs && eventMs <= peakMs + 2 * bucketMs) {
+      near.add(event.id)
+    }
+  }
+  return near
 }
 
 /**

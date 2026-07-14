@@ -12,7 +12,12 @@ import type { InvestigationSession } from './runtime.js'
  */
 
 interface PersistedSessionFile {
-  /** Bump on breaking schema changes; mismatched files are silently ignored */
+  /**
+   * Bump on breaking schema changes; mismatched files are silently ignored.
+   * The optional cross-source fields on InvestigationResult (events, metrics,
+   * traceCandidates, notices) are version-1-compatible: files written before
+   * they existed simply load with those fields undefined.
+   */
   version: 1
   viewUUID: string
   title?: string

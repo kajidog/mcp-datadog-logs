@@ -6,7 +6,7 @@ export interface ExportDataOptions {
   rows?: LogRow[]
 }
 
-const CSV_COLUMNS = ['id', 'timestamp', 'status', 'service', 'host', 'message', 'tags'] as const
+const CSV_COLUMNS = ['id', 'timestamp', 'status', 'service', 'host', 'message', 'tags', 'trace_id'] as const
 
 /** UTF-8 BOM so Excel detects the encoding. */
 const BOM = '\ufeff'
@@ -25,6 +25,7 @@ export function investigationToCsv(result: InvestigationResult, opts: ExportData
         row.message,
         // Tags may contain commas, so join with ";" inside one field.
         (row.tags ?? []).join(';'),
+        row.traceId ?? '',
       ]
         .map(csvField)
         .join(',')

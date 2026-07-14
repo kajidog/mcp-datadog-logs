@@ -14,9 +14,11 @@ import { useDisplayMode } from '@/hooks/useDisplayMode'
 import { useInvestigation } from '@/hooks/useInvestigation'
 import { useMcpResizeNotifications } from '@/hooks/useMcpResizeNotifications'
 import { cn } from '@/lib/utils'
+import { EventList } from './EventList'
 import { FACET_META, FacetSidebar, facetKey } from './FacetSidebar'
 import { LogTable } from './LogTable'
 import { Markdown } from './Markdown'
+import { MetricsPanel } from './MetricsPanel'
 import { PatternList } from './PatternList'
 import { QueryBar } from './QueryBar'
 import { TimelineChart } from './TimelineChart'
@@ -125,6 +127,9 @@ export function Investigator() {
     result?.findings?.length ?? 0,
     activePattern?.template ?? '',
     result?.patterns?.length ?? 0,
+    result?.events?.length ?? 0,
+    result?.metrics?.length ?? 0,
+    result?.notices?.length ?? 0,
   ].join(':')
   useMcpResizeNotifications(isStandaloneDev ? null : connectedApp, resizeTrigger)
 
@@ -311,6 +316,14 @@ export function Investigator() {
         </div>
       )}
 
+      {(result.notices ?? []).length > 0 && (
+        <div className="space-y-0.5 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {(result.notices ?? []).map((notice) => (
+            <div key={notice}>{notice}</div>
+          ))}
+        </div>
+      )}
+
       {exportPath && (
         <div className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs">
           <div>
@@ -371,9 +384,12 @@ export function Investigator() {
                 rangeMs={result.resolvedRange.toMs - result.resolvedRange.fromMs}
                 selectedBucket={effectiveBucket}
                 onBucketSelect={setSelectedBucket}
+                events={result.events}
               />
             </CardContent>
           </Card>
+          <EventList events={result.events ?? []} timeline={result.timeline} onSelectBucket={setSelectedBucket} />
+          <MetricsPanel metrics={result.metrics ?? []} />
           <PatternList
             patterns={result.patterns ?? []}
             analyzedCount={result.rows.length}

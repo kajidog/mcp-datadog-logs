@@ -53,6 +53,13 @@ export function registerInvestigateAppTools(server: McpServer): void {
         groupBy: z.string().optional().describe('Extra facet to break down by'),
         limit: z.number().int().min(1).max(HARD_MAX_ROWS).optional().describe('Max log rows'),
         cursor: z.string().optional().describe('Pagination cursor — appends the next page of rows to the view'),
+        includeEvents: z.boolean().optional().describe('Fetch Datadog events for the window (inherited when omitted)'),
+        eventsQuery: z.string().optional().describe('Events search query (inherited when omitted)'),
+        metricsQueries: z
+          .array(z.string())
+          .max(4)
+          .optional()
+          .describe('Metric queries to fetch alongside logs (inherited when omitted)'),
       },
       _meta: appOnlyMeta,
     },
@@ -64,6 +71,9 @@ export function registerInvestigateAppTools(server: McpServer): void {
       groupBy,
       limit,
       cursor,
+      includeEvents,
+      eventsQuery,
+      metricsQueries,
     }: {
       viewUUID: string
       query: string
@@ -72,12 +82,15 @@ export function registerInvestigateAppTools(server: McpServer): void {
       groupBy?: string
       limit?: number
       cursor?: string
+      includeEvents?: boolean
+      eventsQuery?: string
+      metricsQueries?: string[]
     }): Promise<CallToolResult> => {
       try {
         // No findings arg: existing findings are preserved across UI re-runs.
         const { session } = await runAndStoreInvestigation({
           viewUUID,
-          params: { query, from, to, groupBy, limit, cursor },
+          params: { query, from, to, groupBy, limit, cursor, includeEvents, eventsQuery, metricsQueries },
         })
         return jsonResult(sessionResult(session))
       } catch (error) {

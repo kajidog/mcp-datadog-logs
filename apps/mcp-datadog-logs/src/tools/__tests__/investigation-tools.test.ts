@@ -12,7 +12,8 @@ vi.mock('../../datadog/client.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../datadog/client.js')>()),
   getDatadogClient: vi.fn(() => ({})),
 }))
-vi.mock('../../datadog/investigation.js', () => ({
+vi.mock('../../datadog/investigation.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../datadog/investigation.js')>()),
   runInvestigation: vi.fn(),
 }))
 // Exporting a report tries to open a browser — never spawn one from tests.
