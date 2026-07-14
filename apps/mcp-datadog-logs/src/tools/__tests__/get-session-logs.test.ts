@@ -160,6 +160,16 @@ describe('datadog_get_session_logs (list mode)', () => {
     expect(text).not.toContain('missing.key')
   })
 
+  it('accepts comma-separated strings for status and attributes', async () => {
+    seedSession()
+    const text = resultText(
+      await getHandler()({ viewUUID: VIEW_UUID, status: 'error, warn', attributes: 'http.status_code,error.kind' })
+    )
+    expect(text).toContain('3 of 4 stored rows match (status=error,warn)')
+    expect(text).toContain('http.status_code=502')
+    expect(text).toContain('error.kind=Timeout')
+  })
+
   it('reports zero matches without a row list', async () => {
     seedSession()
     const text = resultText(await getHandler()({ viewUUID: VIEW_UUID, contains: 'no-such-text' }))

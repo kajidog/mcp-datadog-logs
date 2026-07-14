@@ -6,7 +6,7 @@ import { getDatadogClient } from '../datadog/client.js'
 import { extractTraceId, formatAttributeValue, lookupAttribute, normalizeLogRow } from '../datadog/normalize.js'
 import { resolveRange } from '../datadog/time.js'
 import { registerPrefixedTool } from './registration.js'
-import { createErrorResponse, textResult } from './utils.js'
+import { createErrorResponse, stringListParam, textResult, toStringList } from './utils.js'
 
 export function registerSearchLogsTool(server: McpServer): void {
   registerPrefixedTool(
@@ -22,7 +22,14 @@ export function registerSearchLogsTool(server: McpServer): void {
         'datadog_get_session_logs can drill into without further Datadog calls. ' +
         'For a visual, user-facing investigation use datadog_investigate_logs.',
       inputSchema: {
-        query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
+        query: z
+          .string()
+          .default('*')
+          .describe(
+            'Datadog logs search query, e.g. "service:payments status:error". Note: free-text terms only match ' +
+              'the log message, not custom attributes — to match inside an attribute use its @path, ' +
+              'e.g. @error:*SomeException*.'
+          ),
         from: z
           .string()
           .default('now-15m')
@@ -34,13 +41,13 @@ export function registerSearchLogsTool(server: McpServer): void {
         limit: z.number().int().min(1).max(100).default(20).describe('Max log entries to return'),
         sort: z.enum(['timestamp', '-timestamp']).default('-timestamp').describe('Sort order by timestamp'),
         cursor: z.string().optional().describe('Pagination cursor from a previous result'),
-        attributes: z
-          .array(z.string().min(1))
-          .max(10)
+        attributes: stringListParam(10)
           .optional()
           .describe(
             "Log attribute keys to append to each line as key=value, looked up by dot path in the log's custom " +
-              'attributes (e.g. "http.status_code", "error.kind"). Missing keys are skipped.'
+              'attributes. JSON array, e.g. ["http.status_code", "error.kind"] (a comma-separated string also ' +
+              'works). Missing keys are skipped. Values over 300 chars are middle-truncated; for full values run ' +
+              'datadog_run_investigation and use datadog_get_session_logs detail mode.'
           ),
         dedupe: z
           .boolean()
@@ -71,10 +78,11 @@ export function registerSearchLogsTool(server: McpServer): void {
       limit: number
       sort: 'timestamp' | '-timestamp'
       cursor?: string
-      attributes?: string[]
+      attributes?: string[] | string
       dedupe: boolean
     }): Promise<CallToolResult> => {
       try {
+        const attributeKeys = toStringList(attributes, 10)
         resolveRange(from, to)
         const client = getDatadogClient()
         const { logs, nextCursor } = await client.searchLogs({ query, from, to, limit, sort, cursor })
@@ -111,7 +119,7 @@ export function registerSearchLogsTool(server: McpServer): void {
           const row = rows[i]
           const bag = log.attributes?.attributes
           const traceId = extractTraceId(bag)
-          const extras = (attributes ?? [])
+          const extras = (attributeKeys ?? [])
             .map((key) => {
               const value = lookupAttribute(bag, key)
               return value === undefined || value === null ? undefined : `${key}=${formatAttributeValue(value)}`

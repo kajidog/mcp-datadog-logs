@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
 import { formatAttributeValue, lookupAttribute, type RawLog } from '../../datadog/normalize.js'
 import { registerPrefixedTool } from '../registration.js'
-import { textResult } from '../utils.js'
+import { stringListParam, textResult, toStringList } from '../utils.js'
 import { getSession, type InvestigationSession } from './runtime.js'
 import { formatSampleLine } from './summary.js'
 
@@ -39,12 +39,15 @@ export function registerGetSessionLogsTool(server: McpServer): void {
           .min(0)
           .optional()
           .describe('Detail mode: stored row index (the [N] prefix in list output) — alternative to logId'),
-        fields: z
-          .array(z.string().min(1))
-          .max(20)
+        fields: stringListParam(20)
           .optional()
-          .describe('Detail mode: attribute dot-paths to return instead of the full JSON (for large logs)'),
-        status: z.array(z.string()).optional().describe('List filter: only these statuses, e.g. ["error","warn"]'),
+          .describe(
+            'Detail mode: attribute dot-paths to return instead of the full JSON (for large logs). ' +
+              'JSON array or comma-separated string.'
+          ),
+        status: stringListParam()
+          .optional()
+          .describe('List filter: only these statuses, e.g. ["error","warn"] (or "error,warn")'),
         service: z.string().optional().describe('List filter: exact service name'),
         pattern: z
           .number()
@@ -55,13 +58,12 @@ export function registerGetSessionLogsTool(server: McpServer): void {
         contains: z.string().optional().describe('List filter: case-insensitive substring of the message'),
         offset: z.number().int().min(0).default(0).describe('List mode: rows to skip (for paging)'),
         limit: z.number().int().min(1).max(100).default(20).describe('List mode: max rows to return'),
-        attributes: z
-          .array(z.string().min(1))
-          .max(10)
+        attributes: stringListParam(10)
           .optional()
           .describe(
-            'List mode: attribute dot-paths appended per line as key=value, looked up in the stored raw log ' +
-              '(e.g. "http.status_code", "error.kind"). Missing keys are skipped.'
+            'List mode: attribute dot-paths appended per line as key=value, looked up in the stored raw log. ' +
+              'JSON array, e.g. ["http.status_code", "error.kind"] (a comma-separated string also works). ' +
+              'Missing keys are skipped; long values are middle-truncated — use detail mode for full values.'
           ),
       },
       annotations: {
@@ -84,14 +86,14 @@ export function registerGetSessionLogsTool(server: McpServer): void {
       viewUUID: string
       logId?: string
       row?: number
-      fields?: string[]
-      status?: string[]
+      fields?: string[] | string
+      status?: string[] | string
       service?: string
       pattern?: number
       contains?: string
       offset: number
       limit: number
-      attributes?: string[]
+      attributes?: string[] | string
     }): Promise<CallToolResult> => {
       const session = getSession(viewUUID)
       if (!session) {
@@ -101,16 +103,16 @@ export function registerGetSessionLogsTool(server: McpServer): void {
         )
       }
       if (logId !== undefined || row !== undefined) {
-        return formatLogDetail(session, { logId, row, fields })
+        return formatLogDetail(session, { logId, row, fields: toStringList(fields, 20) })
       }
       return formatLogList(session, {
-        status,
+        status: toStringList(status),
         service,
         pattern,
         contains,
         offset: offset ?? 0,
         limit: limit ?? 20,
-        attributes,
+        attributes: toStringList(attributes, 10),
       })
     }
   )
