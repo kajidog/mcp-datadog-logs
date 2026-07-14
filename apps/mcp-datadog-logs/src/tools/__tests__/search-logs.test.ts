@@ -130,4 +130,22 @@ describe('datadog_search_logs dedupe parameter', () => {
     const line = await runSearch([log({})], { dedupe: false })
     expect(line).toBe('2026-07-11T09:20:14.000Z [ERROR] web-store — Payment failed')
   })
+
+  it('reports every pattern on the page, beyond the analyzer default cap of 20', async () => {
+    // 25 messages that normalize to 25 distinct templates (no digits/ids to mask).
+    const logs = Array.from({ length: 25 }, (_, i) =>
+      logWithMessage(`log-${i}`, `failure kind ${String.fromCharCode(65 + i)} in module ${String.fromCharCode(97 + i)}`)
+    )
+    searchLogs.mockResolvedValue({ logs })
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_search_logs
+    const result = await tool.handler(
+      { query: '*', from: 'now-15m', to: 'now', limit: 25, sort: '-timestamp', dedupe: true },
+      {}
+    )
+
+    const lines = result.content[0].text.split('\n')
+    expect(lines[0]).toBe('25 logs in 25 patterns (query: *, range: now-15m → now)')
+    expect(lines).toHaveLength(26) // header + one line per pattern, none dropped
+  })
 })

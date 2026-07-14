@@ -92,7 +92,10 @@ export function registerSearchLogsTool(server: McpServer): void {
         )
         const footer = nextCursor ? `\nnextCursor: ${nextCursor}` : ''
         if (dedupe) {
-          const patterns = extractLogPatterns(rows)
+          // Uncapped on purpose: the default 20-pattern cap would silently drop
+          // the rarest templates and make the header underreport the total.
+          // Each pattern needs at least one row, so the page size bounds this.
+          const patterns = extractLogPatterns(rows, { maxPatterns: rows.length })
           const header = `${logs.length} logs in ${patterns.length} patterns (query: ${query}, range: ${from} → ${to})`
           const lines = patterns.map((pattern) => {
             const rowIndex = rows.findIndex((row) => row.id === pattern.rowIds[0])
