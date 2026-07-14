@@ -1,6 +1,6 @@
 {
   "name": "@kajidog/mcp-datadog-logs",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "MCP server for investigating Datadog logs with an interactive MCP Apps UI and shareable HTML reports",
   "type": "module",
   "license": "MIT",

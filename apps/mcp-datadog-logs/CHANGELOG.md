@@ -1,5 +1,51 @@
 # @kajidog/mcp-datadog-logs
 
+## 0.3.0
+
+### Minor Changes
+
+- 9b25fa7: Add cross-source investigation across Datadog and a metrics query tool
+
+  - New `datadog_query_metrics` tool: query metric timeseries with the classic
+    query syntax (`avg:system.cpu.user{service:web} by {host}`) and get compact
+    per-series stats plus downsampled values (requires the `timeseries_query`
+    scope).
+  - Investigation tools (`datadog_run_investigation` / `datadog_investigate_logs`
+    / `_run_investigation`) now fetch Datadog events (deploys, alerts) for the
+    same window by default (`includeEvents` / `eventsQuery`) and optional metric
+    series (`metricsQueries`, up to 4). Missing `events_read` /
+    `timeseries_query` scopes degrade gracefully: the fetch is skipped and noted
+    in the result's `notices` instead of failing the run.
+  - Log rows now carry the extracted `trace_id`, and investigation summaries list
+    trace candidates (error-heavy first) with a ready-to-use
+    `datadog_get_trace trace_id=...` pivot.
+  - Investigator UI: deploy/alert markers on the timeline, an event list that
+    filters logs to the event's time bucket, a metrics panel, and copyable
+    trace-id chips on log rows.
+  - HTML report: event markers on the timeline SVG, an events table, a metrics
+    section with sparklines; CSV export gains a `trace_id` column.
+
+- 8bc2945: Add trace and event correlation tools, and richer search_logs output
+
+  - New `datadog_get_trace` tool: fetches all APM spans of a trace via the Spans API (cursor pagination up to 500 spans) and renders a chronological parent/child tree with service, resource, span type, start offset, duration, and error markers
+  - New `datadog_search_events` tool: searches Datadog events (deployments, monitor alerts, config changes) so error windows found in logs can be correlated with what changed
+  - `datadog_search_logs` lines now include `trace_id=<id>` when the log carries one (pivot point for `datadog_get_trace`) and accept an `attributes` parameter to append selected log attributes as `key=value`
+  - 403 errors from the new tools name the scope they actually need (`apm_read` for traces, `events_read` for events) instead of `logs_read_data`; required scopes are documented in the README and docs/datadog-permissions.md
+
+- 53405f0: Make LLM-facing list params and attribute truncation more forgiving, based on real investigation feedback:
+
+  - `attributes` (search_logs, get_session_logs) and `fields`/`status` (get_session_logs) now also accept a comma-separated string ("a,b,c") in addition to a JSON array, instead of failing validation
+  - Attribute values appended as `key=value` are now truncated at 300 chars (was 100) and middle-truncated so the tail survives — the decisive part of error strings (e.g. AWS "…, StatusCode: 400, FooException") often sits at the end
+  - Documented that Datadog free-text queries only match the log message (use `@path:*substring*` for custom attributes), and pointed long-value readers to get_session_logs detail mode
+
+- a4cb0bc: Session drill-down tool and leaner tool output for fewer calls and less context
+
+  - New `datadog_get_session_logs` tool: reads rows already stored in a `datadog_run_investigation` session with zero extra Datadog API calls. List mode filters by `status` / `service` / message `pattern` (the summary's `#N`) / `contains` substring with `offset`/`limit` paging; detail mode (`row` index or `logId`) returns one full raw log as JSON, with `fields` to select attribute dot-paths and a bounded overview fallback for oversized logs
+  - `datadog_run_investigation` summaries are now drillable: message patterns are numbered (`#1`…), sample rows carry their stored row index (`[N]`), and sample selection prefers error rows over the first N fetched
+  - `datadog_get_trace` output is leaner: runs of identical leaf sibling spans collapse into one `service resource [type] +offset dur xN (total …)` line by default (`collapse: false` restores the full tree), `errors_only` renders just error spans plus their ancestor chains, and `max_spans` caps the rendered tree per call
+  - `datadog_search_logs` gains `dedupe: true` to cluster the fetched page into message patterns (one `Nx template — e.g. …` line per pattern) and its description now steers broad investigations toward `datadog_run_investigation`
+  - `datadog_search_events` gains `max_tags` (0 hides tags for a pure event timeline)
+
 ## 0.2.1
 
 ### Patch Changes
