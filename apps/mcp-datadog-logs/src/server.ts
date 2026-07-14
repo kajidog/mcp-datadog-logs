@@ -7,6 +7,7 @@ import { registerGetSessionLogsTool } from './tools/investigate/get-session-logs
 import { registerInvestigateTool } from './tools/investigate/investigate-tool.js'
 import { registerInvestigatorResource } from './tools/investigate/resource.js'
 import { registerRunInvestigationTool } from './tools/investigate/run-investigation-tool.js'
+import { registerQueryMetricsTool } from './tools/query-metrics.js'
 import { registerSearchEventsTool } from './tools/search-events.js'
 import { registerSearchLogsTool } from './tools/search-logs.js'
 import { VERSION } from './version.js'
@@ -23,6 +24,7 @@ export function createServer(): McpServer {
   registerAggregateLogsTool(server)
   registerGetTraceTool(server)
   registerSearchEventsTool(server)
+  registerQueryMetricsTool(server)
   registerRunInvestigationTool(server)
   registerGetSessionLogsTool(server)
   registerExportReportTool(server)

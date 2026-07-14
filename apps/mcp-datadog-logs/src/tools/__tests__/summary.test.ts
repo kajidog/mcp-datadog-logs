@@ -93,4 +93,77 @@ describe('formatInvestigationSummary', () => {
       'nextCursor: abc123'
     )
   })
+
+  it('lists events chronologically and flags those near the error spike', () => {
+    const result = fixtureResult({
+      timeline: [
+        { time: '2026-07-06T10:00:00.000Z', counts: { error: 2 } },
+        { time: '2026-07-06T10:05:00.000Z', counts: { error: 50 } },
+        { time: '2026-07-06T10:10:00.000Z', counts: { error: 3 } },
+      ],
+      events: [
+        { id: 'e1', time: '2026-07-06T10:06:00.000Z', kind: 'deploy', title: 'Deploy v2', source: 'github' },
+        { id: 'e2', time: '2026-07-06T10:40:00.000Z', kind: 'other', title: 'Unrelated event' },
+      ],
+    })
+    const summary = formatInvestigationSummary(result, VIEW_UUID)
+    expect(summary).toContain('Events in window (2):')
+    expect(summary).toContain('2026-07-06T10:06:00.000Z [deploy] github — Deploy v2 (near error spike)')
+    expect(summary).toContain('2026-07-06T10:40:00.000Z [other] Unrelated event')
+    expect(summary).not.toContain('Unrelated event (near error spike)')
+  })
+
+  it('lists one stats line per metric series', () => {
+    const result = fixtureResult({
+      metrics: [
+        {
+          query: 'avg:system.cpu.user{*}',
+          metric: 'avg:system.cpu.user',
+          scope: 'service:payments',
+          unit: '%',
+          points: [{ time: '2026-07-06T10:00:00.000Z', value: 45.6 }],
+          stats: { min: 12.3, max: 98.7, avg: 45.6, last: 50.1 },
+        },
+      ],
+    })
+    const summary = formatInvestigationSummary(result, VIEW_UUID)
+    expect(summary).toContain('Metrics:')
+    expect(summary).toContain('avg:system.cpu.user service:payments [%] min 12.3 avg 45.6 max 98.7 last 50.1')
+  })
+
+  it('lists trace candidates with a ready-to-use pivot', () => {
+    const result = fixtureResult({
+      traceCandidates: [
+        {
+          traceId: 'abc123',
+          count: 5,
+          errorCount: 4,
+          firstSeen: '2026-07-06T10:01:00.000Z',
+          services: ['payments', 'checkout'],
+        },
+      ],
+    })
+    const summary = formatInvestigationSummary(result, VIEW_UUID)
+    expect(summary).toContain('Trace candidates (from stored rows):')
+    expect(summary).toContain(
+      'abc123 — 5 rows (4 errors) services=payments,checkout → datadog_get_trace trace_id=abc123'
+    )
+  })
+
+  it('prefixes notices with Note:', () => {
+    const summary = formatInvestigationSummary(fixtureResult({ notices: ['Events unavailable: 403'] }), VIEW_UUID)
+    expect(summary).toContain('Note: Events unavailable: 403')
+  })
+
+  it('produces byte-identical output for results without cross-source fields', () => {
+    const legacy = fixtureResult()
+    const summary = formatInvestigationSummary(legacy, VIEW_UUID)
+    expect(summary).not.toContain('Events in window')
+    expect(summary).not.toContain('Metrics:')
+    expect(summary).not.toContain('Trace candidates')
+    expect(summary).not.toContain('Note:')
+    // Explicitly-empty arrays must render the same as absent fields.
+    const withEmpty = fixtureResult({ events: [], metrics: [], traceCandidates: [], notices: [] })
+    expect(formatInvestigationSummary(withEmpty, VIEW_UUID)).toBe(summary)
+  })
 })

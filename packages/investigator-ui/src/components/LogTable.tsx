@@ -42,6 +42,7 @@ export function LogTable({
   const [details, setDetails] = useState<Record<string, unknown>>({})
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedTraceId, setCopiedTraceId] = useState<string | null>(null)
 
   const toggle = async (row: LogRow) => {
     if (expandedId === row.id) {
@@ -71,6 +72,18 @@ export function LogTable({
     setCopiedId(rowId)
     window.setTimeout(() => {
       setCopiedId((current) => (current === rowId ? null : current))
+    }, 1500)
+  }
+
+  const copyTraceId = async (event: MouseEvent<HTMLButtonElement>, rowId: string, traceId: string) => {
+    event.stopPropagation()
+    const copied = await copyText(traceId)
+    if (!copied) {
+      return
+    }
+    setCopiedTraceId(rowId)
+    window.setTimeout(() => {
+      setCopiedTraceId((current) => (current === rowId ? null : current))
     }, 1500)
   }
 
@@ -127,6 +140,21 @@ export function LogTable({
                     {row.service ?? '-'}
                   </TableCell>
                   <TableCell className="truncate py-1.5 text-xs" title={row.message}>
+                    {row.traceId && (
+                      <button
+                        type="button"
+                        onClick={(event) => void copyTraceId(event, row.id, row.traceId ?? '')}
+                        title={copiedTraceId === row.id ? 'コピーしました' : `trace_id をコピー: ${row.traceId}`}
+                        className="mr-1.5 inline-flex max-w-32 items-center gap-1 truncate rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground hover:bg-accent"
+                      >
+                        {copiedTraceId === row.id ? (
+                          <Check className="size-2.5 shrink-0 text-status-info" />
+                        ) : (
+                          <Copy className="size-2.5 shrink-0" />
+                        )}
+                        <span className="truncate">trace:{row.traceId}</span>
+                      </button>
+                    )}
                     {row.message ? highlightText(row.message, highlightTerms ?? []) : '(メッセージなし)'}
                   </TableCell>
                 </TableRow>

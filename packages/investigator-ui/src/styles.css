@@ -30,6 +30,10 @@
   --status-info: #2a78d6;
   --status-debug: #898781;
   --status-other: #898781;
+  /* Event markers overlaid on the timeline. */
+  --event-deploy: #8250df;
+  --event-alert: #cf4a0c;
+  --event-other: #898781;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -54,6 +58,8 @@
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
     --status-info: #3987e5;
+    --event-deploy: #a371f7;
+    --event-alert: #f0713a;
   }
 }
 
@@ -85,6 +91,9 @@
   --color-status-warn: var(--status-warn);
   --color-status-info: var(--status-info);
   --color-status-debug: var(--status-debug);
+  --color-event-deploy: var(--event-deploy);
+  --color-event-alert: var(--event-alert);
+  --color-event-other: var(--event-other);
 }
 
 @layer base {

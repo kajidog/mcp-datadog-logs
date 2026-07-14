@@ -1,7 +1,7 @@
-import { client, v2 } from '@datadog/datadog-api-client'
+import { client, v1, v2 } from '@datadog/datadog-api-client'
 import type { DatadogConfig } from '../config.js'
 import { getDatadogConfig } from '../config.js'
-import type { RawAggregateBucket, RawEvent, RawLog, RawSpan } from './normalize.js'
+import type { RawAggregateBucket, RawEvent, RawLog, RawMetricSeries, RawSpan } from './normalize.js'
 
 export interface SearchLogsParams {
   query: string
@@ -44,13 +44,22 @@ export interface SearchEventsParams {
   limit: number
 }
 
+export interface QueryMetricsParams {
+  /** Classic metric query string, e.g. "avg:system.cpu.user{service:web} by {host}" */
+  query: string
+  /** Epoch seconds — the v1 query API does not accept time-math strings */
+  fromSec: number
+  toSec: number
+}
+
 const SPANS_PAGE_LIMIT = 200
 
-/** Datadog API client wrapper. Despite the name it also covers spans and events. */
+/** Datadog API client wrapper. Despite the name it also covers spans, events, and metrics. */
 export class DatadogLogsClient {
   private readonly api: v2.LogsApi
   private readonly spansApi: v2.SpansApi
   private readonly eventsApi: v2.EventsApi
+  private readonly metricsApi: v1.MetricsApi
   private readonly indexes?: string[]
   readonly site: string
 
@@ -71,6 +80,7 @@ export class DatadogLogsClient {
     this.api = new v2.LogsApi(configuration)
     this.spansApi = new v2.SpansApi(configuration)
     this.eventsApi = new v2.EventsApi(configuration)
+    this.metricsApi = new v1.MetricsApi(configuration)
     this.indexes = config.indexes
     this.site = config.site
   }
@@ -165,6 +175,20 @@ export class DatadogLogsClient {
     return { spans, truncated: Boolean(cursor) && spans.length >= cap }
   }
 
+  /**
+   * Timeseries points for a classic metric query (v1 query API — the stable
+   * "query string in, series out" endpoint; the v2 equivalent is still
+   * marked unstable in the SDK).
+   */
+  async queryMetrics(params: QueryMetricsParams): Promise<RawMetricSeries[]> {
+    const response = await this.metricsApi.queryMetrics({
+      from: params.fromSec,
+      to: params.toSec,
+      query: params.query,
+    })
+    return (response.series ?? []) as RawMetricSeries[]
+  }
+
   /** Single page of Datadog events (deployments, monitor alerts, ...) matching an events search query. */
   async searchEvents(params: SearchEventsParams): Promise<RawEvent[]> {
     const response = await this.eventsApi.searchEvents({
@@ -196,7 +220,8 @@ export function resetDatadogClient(): void {
 /**
  * Maps Datadog API failures to actionable messages for the model/user.
  * `requiredScope` names the application-key scope the failing API needs
- * (logs tools: logs_read_data, spans: apm_read, events: events_read).
+ * (logs tools: logs_read_data, spans: apm_read, events: events_read,
+ * metrics: timeseries_query).
  */
 export function describeDatadogError(error: unknown, requiredScope = 'logs_read_data'): string {
   const err = error as { code?: number; message?: string } | undefined

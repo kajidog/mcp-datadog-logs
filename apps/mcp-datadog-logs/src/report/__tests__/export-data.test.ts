@@ -6,7 +6,7 @@ describe('investigationToCsv', () => {
   it('starts with a BOM and the header row', () => {
     const csv = investigationToCsv(fixtureResult({ rows: [] }))
     expect(csv.startsWith('\ufeff')).toBe(true)
-    expect(csv.slice(1).split('\r\n')[0]).toBe('id,timestamp,status,service,host,message,tags')
+    expect(csv.slice(1).split('\r\n')[0]).toBe('id,timestamp,status,service,host,message,tags,trace_id')
   })
 
   it('quotes fields with commas, quotes and newlines per RFC 4180 and joins tags with ";"', () => {

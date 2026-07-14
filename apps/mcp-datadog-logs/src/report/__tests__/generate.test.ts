@@ -198,3 +198,114 @@ describe('escapeHtml', () => {
     expect(escapeHtml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;')
   })
 })
+
+describe('cross-source report sections', () => {
+  function crossSourceResult(): InvestigationResult {
+    return {
+      ...fixtureResult(),
+      events: [
+        {
+          id: 'e1',
+          time: '2026-07-06T10:03:00.000Z',
+          kind: 'deploy',
+          title: '<img src=x onerror=alert(1)> deploy',
+          source: 'github',
+          tags: ['service:payments'],
+        },
+      ],
+      metrics: [
+        {
+          query: 'avg:system.cpu.user{*}',
+          metric: 'avg:system.cpu.user',
+          scope: 'service:<b>payments</b>',
+          unit: '%',
+          points: [
+            { time: '2026-07-06T10:00:00.000Z', value: 10 },
+            { time: '2026-07-06T10:05:00.000Z', value: null },
+            { time: '2026-07-06T10:10:00.000Z', value: 30 },
+          ],
+          stats: { min: 10, max: 30, avg: 20, last: 30 },
+        },
+      ],
+      notices: ['Events unavailable: <403>'],
+    }
+  }
+
+  it('renders an escaped events table with kind badges', () => {
+    const html = generateReport(crossSourceResult(), new Map())
+    expect(html).toContain('Events in window (1)')
+    expect(html).toContain('event-badge deploy')
+    expect(html).not.toContain('<img src=x')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt; deploy')
+    expect(html).toContain('github')
+  })
+
+  it('renders a metrics section with escaped labels, stats, and a sparkline', () => {
+    const html = generateReport(crossSourceResult(), new Map())
+    expect(html).toContain('<h2>Metrics</h2>')
+    expect(html).not.toContain('service:<b>payments</b>')
+    expect(html).toContain('service:&lt;b&gt;payments&lt;/b&gt;')
+    expect(html).toContain('min 10 · avg 20 · max 30 · last 30 %')
+    expect(html).toContain('Metric sparkline')
+  })
+
+  it('renders escaped notices and event markers on the timeline SVG', () => {
+    const html = generateReport(crossSourceResult(), new Map())
+    expect(html).toContain('&lt;403&gt;')
+    expect(html).not.toContain('<403>')
+    expect(html).toContain('event-marker')
+    expect(html).toContain('deploy event')
+  })
+
+  it('omits every cross-source section when the fields are absent', () => {
+    const html = generateReport(fixtureResult(), new Map())
+    expect(html).not.toContain('Events in window')
+    expect(html).not.toContain('<h2>Metrics</h2>')
+    expect(html).not.toContain('event-marker')
+    expect(html).not.toContain('class="notices"')
+  })
+
+  it('shows a copyable trace chip on rows that carry a trace id', () => {
+    const result = fixtureResult()
+    result.rows[0].traceId = 'trace-<script>'
+    const html = generateReport(result, new Map())
+    expect(html).toContain('trace:trace-&lt;script&gt;')
+    expect(html).not.toContain('trace-<script>')
+  })
+})
+
+describe('renderTimelineSvg event markers', () => {
+  const timeline = [
+    { time: '2026-07-06T10:00:00.000Z', counts: { error: 5 } },
+    { time: '2026-07-06T10:05:00.000Z', counts: { error: 3 } },
+  ]
+
+  it('renders a dashed line + triangle per in-range event with an escaped tooltip', () => {
+    const svg = renderTimelineSvg(timeline, {
+      endMs: Date.parse('2026-07-06T10:10:00Z'),
+      events: [{ id: 'e1', time: '2026-07-06T10:05:00.000Z', kind: 'alert', title: '"quoted" & <alert>' }],
+    })
+    expect(svg).toContain('class="event-marker"')
+    expect(svg).toContain('stroke-dasharray="3 3"')
+    expect(svg).toContain('var(--event-alert)')
+    expect(svg).toContain('&quot;quoted&quot; &amp; &lt;alert&gt;')
+  })
+
+  it('drops events outside the rendered bucket range', () => {
+    const svg = renderTimelineSvg(timeline, {
+      endMs: Date.parse('2026-07-06T10:10:00Z'),
+      events: [{ id: 'e1', time: '2026-07-06T12:00:00.000Z', kind: 'deploy', title: 'late deploy' }],
+    })
+    expect(svg).not.toContain('event-marker')
+  })
+
+  it('positions markers by linear interpolation over the bucket span', () => {
+    const svg = renderTimelineSvg(timeline, {
+      width: 1000,
+      endMs: Date.parse('2026-07-06T10:10:00Z'),
+      events: [{ id: 'e1', time: '2026-07-06T10:05:00.000Z', kind: 'deploy', title: 'mid deploy' }],
+    })
+    // Domain 10:00–10:10, event at 10:05 → x = padLeft + plotW / 2 = 44 + 948/2 = 518.
+    expect(svg).toContain('x1="518.0"')
+  })
+})

@@ -8,7 +8,8 @@ vi.mock('../../datadog/client.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../datadog/client.js')>()),
   getDatadogClient: vi.fn(() => ({})),
 }))
-vi.mock('../../datadog/investigation.js', () => ({
+vi.mock('../../datadog/investigation.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../datadog/investigation.js')>()),
   runInvestigation: vi.fn(),
 }))
 
@@ -124,6 +125,80 @@ describe('runAndStoreInvestigation', () => {
     expect(secondTotal).toBe(6)
     const allRowIds = (second.session.result.patterns ?? []).flatMap((p) => p.rowIds).sort()
     expect(allRowIds).toEqual(['log-1', 'log-2', 'log-3', 'log-4', 'log-5', 'log-6'])
+  })
+
+  it('carries events, metrics, and notices forward across a cursor merge', async () => {
+    const events = [{ id: 'e1', time: '2026-07-06T10:00:00.000Z', kind: 'deploy' as const, title: 'Deploy v2' }]
+    const metrics = [
+      {
+        query: 'avg:system.cpu.user{*}',
+        metric: 'avg:system.cpu.user',
+        points: [{ time: '2026-07-06T10:00:00.000Z', value: 10 }],
+        stats: { min: 10, max: 10, avg: 10, last: 10 },
+      },
+    ]
+    mockRun({ events, metrics, notices: ['Events partially fetched'] })
+    const first = await runAndStoreInvestigation({ params: { query: '*', from: 'now-1h', to: 'now' } })
+
+    // The pipeline skips events/metrics on cursor pages, so the page-2 result has none.
+    mockRun({ rows: [fixtureRow('log-5')] })
+    const second = await runAndStoreInvestigation({
+      viewUUID: first.viewUUID,
+      params: { cursor: 'page-2' },
+    })
+    expect(second.session.result.events).toEqual(events)
+    expect(second.session.result.metrics).toEqual(metrics)
+    expect(second.session.result.notices).toEqual(['Events partially fetched'])
+  })
+
+  it('inherits cross-source params from the stored session on re-runs', async () => {
+    mockRun({
+      params: {
+        query: '*',
+        from: 'now-1h',
+        to: 'now',
+        metricsQueries: ['avg:system.cpu.user{*}'],
+        eventsQuery: 'source:github',
+      },
+    })
+    const first = await runAndStoreInvestigation({
+      params: {
+        query: '*',
+        from: 'now-1h',
+        to: 'now',
+        metricsQueries: ['avg:system.cpu.user{*}'],
+        eventsQuery: 'source:github',
+      },
+    })
+
+    // A plain UI re-run (no cursor) passes only query/range — the stored
+    // metricsQueries/eventsQuery must survive.
+    mockRun()
+    await runAndStoreInvestigation({
+      viewUUID: first.viewUUID,
+      params: { query: 'status:error', from: 'now-1h', to: 'now' },
+    })
+    expect(runInvestigationMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: 'status:error',
+        metricsQueries: ['avg:system.cpu.user{*}'],
+        eventsQuery: 'source:github',
+      })
+    )
+  })
+
+  it('recomputes trace candidates over all rows after a cursor merge', async () => {
+    mockRun({ rows: [fixtureRow('log-1', { traceId: 'trace-a' })] })
+    const first = await runAndStoreInvestigation({ params: { query: '*', from: 'now-1h', to: 'now' } })
+    expect(first.session.result.traceCandidates?.map((c) => c.traceId)).toEqual(['trace-a'])
+
+    mockRun({ rows: [fixtureRow('log-2', { traceId: 'trace-b' }), fixtureRow('log-3', { traceId: 'trace-b' })] })
+    const second = await runAndStoreInvestigation({
+      viewUUID: first.viewUUID,
+      params: { cursor: 'page-2' },
+    })
+    expect(second.session.result.traceCandidates?.map((c) => c.traceId)).toEqual(['trace-b', 'trace-a'])
   })
 
   it('recreates a session for an evicted viewUUID, keeping the handle stable', async () => {

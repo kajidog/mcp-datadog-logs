@@ -36,6 +36,23 @@ export function registerInvestigateTool(server: McpServer): void {
           .max(20_000)
           .optional()
           .describe('Plain-text findings/notes to show in the UI findings panel and HTML report'),
+        includeEvents: z
+          .boolean()
+          .optional()
+          .describe(
+            'Also fetch Datadog events (deploys, alerts) in the window and overlay them on the timeline (default true)'
+          ),
+        eventsQuery: z
+          .string()
+          .optional()
+          .describe('Events search query, e.g. "source:github tags:service:web" (default: all events in the window)'),
+        metricsQueries: z
+          .array(z.string())
+          .max(4)
+          .optional()
+          .describe(
+            'Metric queries to show alongside logs (classic syntax), e.g. ["avg:system.cpu.user{service:web}"]'
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -51,6 +68,9 @@ export function registerInvestigateTool(server: McpServer): void {
       title,
       viewUUID,
       findings,
+      includeEvents,
+      eventsQuery,
+      metricsQueries,
     }: {
       query: string
       from: string
@@ -59,6 +79,9 @@ export function registerInvestigateTool(server: McpServer): void {
       title?: string
       viewUUID?: string
       findings?: string
+      includeEvents?: boolean
+      eventsQuery?: string
+      metricsQueries?: string[]
     }): Promise<CallToolResult> => {
       try {
         // Display path: show an existing session without touching Datadog.
@@ -100,7 +123,7 @@ export function registerInvestigateTool(server: McpServer): void {
         }
 
         const stored = await runAndStoreInvestigation({
-          params: { query, from, to, groupBy, title },
+          params: { query, from, to, groupBy, title, includeEvents, eventsQuery, metricsQueries },
           findings,
         })
         return {

@@ -1,4 +1,4 @@
-import type { TimelineBucket } from '@kajidog/investigation-shared'
+import type { EventMarker, EventMarkerKind, TimelineBucket } from '@kajidog/investigation-shared'
 
 /** Bottom-to-top stacking order; unknown statuses render above these. */
 const STACK_ORDER = ['debug', 'info', 'warn', 'error']
@@ -21,6 +21,16 @@ export function stackStatuses(timeline: TimelineBucket[]): string[] {
   return [...ordered, ...extras]
 }
 
+export const EVENT_COLOR_VAR: Record<EventMarkerKind, string> = {
+  deploy: 'var(--event-deploy)',
+  alert: 'var(--event-alert)',
+  other: 'var(--event-other)',
+}
+
+export function eventColor(kind: EventMarkerKind): string {
+  return EVENT_COLOR_VAR[kind] ?? EVENT_COLOR_VAR.other
+}
+
 interface TimelineSvgOptions {
   width?: number
   height?: number
@@ -29,6 +39,8 @@ interface TimelineSvgOptions {
   endMs?: number
   /** IANA time zone for axis labels and tooltips; invalid values fall back to UTC. */
   timeZone?: string
+  /** Events to overlay as vertical markers in a lane above the bars. */
+  events?: EventMarker[]
 }
 
 /**
@@ -44,7 +56,9 @@ interface TimelineSvgOptions {
 export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineSvgOptions = {}): string {
   const width = options.width ?? 1000
   const height = options.height ?? 220
-  const pad = { top: 10, right: 8, bottom: 24, left: 44 }
+  const hasEvents = (options.events?.length ?? 0) > 0
+  // Extra headroom for the event-marker lane above the bars.
+  const pad = { top: hasEvents ? 24 : 10, right: 8, bottom: 24, left: 44 }
   const plotW = width - pad.left - pad.right
   const plotH = height - pad.top - pad.bottom
 
@@ -117,7 +131,67 @@ export function renderTimelineSvg(timeline: TimelineBucket[], options: TimelineS
     }
   })
 
+  if (hasEvents) {
+    parts.push(
+      renderEventMarkers(options.events ?? [], bucketRanges, {
+        padLeft: pad.left,
+        padTop: pad.top,
+        plotW,
+        plotH,
+        formatTime,
+      })
+    )
+  }
+
   parts.push('</svg>')
+  return parts.join('')
+}
+
+interface EventMarkerLayout {
+  padLeft: number
+  padTop: number
+  plotW: number
+  plotH: number
+  formatTime: (iso: string) => string
+}
+
+/**
+ * Dashed vertical line plus a triangle marker in the lane above the bars for
+ * each event inside the rendered bucket range. X is linearly interpolated
+ * over the full bucket span (buckets share a fixed interval).
+ */
+function renderEventMarkers(
+  events: EventMarker[],
+  bucketRanges: Array<{ fromMs: number; toMs: number } | undefined>,
+  layout: EventMarkerLayout
+): string {
+  const defined = bucketRanges.filter((r): r is { fromMs: number; toMs: number } => r !== undefined)
+  if (defined.length === 0) {
+    return ''
+  }
+  const domainFrom = defined[0].fromMs
+  const domainTo = defined[defined.length - 1].toMs
+  if (domainTo <= domainFrom) {
+    return ''
+  }
+  const parts: string[] = []
+  for (const event of events) {
+    const eventMs = Date.parse(event.time)
+    if (Number.isNaN(eventMs) || eventMs < domainFrom || eventMs > domainTo) {
+      continue
+    }
+    const x = layout.padLeft + ((eventMs - domainFrom) / (domainTo - domainFrom)) * layout.plotW
+    const color = eventColor(event.kind)
+    const tooltip = `${layout.formatTime(event.time)} [${event.kind}] ${event.title}`
+    const yTop = layout.padTop - 6
+    parts.push(
+      `<g class="event-marker">` +
+        `<title>${escapeXml(tooltip)}</title>` +
+        `<line x1="${x.toFixed(1)}" y1="${layout.padTop}" x2="${x.toFixed(1)}" y2="${(layout.padTop + layout.plotH).toFixed(1)}" stroke="${color}" stroke-width="1" stroke-dasharray="3 3" opacity="0.75"/>` +
+        `<path d="M ${(x - 5).toFixed(1)} ${(yTop - 5).toFixed(1)} L ${(x + 5).toFixed(1)} ${(yTop - 5).toFixed(1)} L ${x.toFixed(1)} ${(yTop + 1).toFixed(1)} Z" fill="${color}"/>` +
+        `</g>`
+    )
+  }
   return parts.join('')
 }
 

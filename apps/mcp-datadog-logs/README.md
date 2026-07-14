@@ -10,11 +10,19 @@ needed).
 
 - 🔎 `datadog_search_logs` — quick log search for the model (compact text output)
 - 📊 `datadog_aggregate_logs` — counts by facet or timeseries for the model
+- 📈 `datadog_query_metrics` — metric timeseries for the model (classic query
+  syntax, per-series stats + downsampled values as compact text)
 - 🕵️ `datadog_run_investigation` — headless investigation for the model:
   - full result (log rows, timeline, facets) stored server-side under a `viewUUID`
   - the model receives only a compact summary — iterate without bloating context
   - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
     Markdown `findings` rendered in the UI and the HTML report
+- 🔗 cross-source investigation — the investigation tools also fetch Datadog
+  **events** (deploys, alerts) in the same window and optional **metrics**
+  (`metricsQueries`), overlay them on the timeline (UI + HTML report), and
+  surface **trace candidates** extracted from the fetched rows so the model can
+  pivot straight into `datadog_get_trace`; missing `events_read` /
+  `timeseries_query` scopes degrade gracefully instead of failing the run
 - 🔬 `datadog_get_session_logs` — drill into a stored session with **zero extra
   Datadog API calls**: filter the stored rows by status / service / message
   pattern `#N` / substring, or fetch one full raw log by `row=[N]` index or
@@ -26,10 +34,11 @@ needed).
   templates (`Payment failed for order <*>`), surfaced in tool summaries, the UI
   and HTML reports
 - 🖥️ `datadog_investigate_logs` — opens the interactive investigation UI:
-  - stacked timeline chart of log volume by status
+  - stacked timeline chart of log volume by status, with deploy/alert event markers
+  - event list (click an event to filter logs to its time bucket) and a metrics panel
   - facet sidebar (service / status / host / custom `groupBy`) — click to filter
   - message pattern panel — fetched rows clustered into templates, click to filter
-  - log table with expandable full-JSON detail, keyword highlighting and load-more pagination
+  - log table with expandable full-JSON detail, copyable `trace_id` chips, keyword highlighting and load-more pagination
   - adjust query & time range and re-run right from the UI
   - **Export** button → self-contained HTML report, plus CSV/JSON export of the filtered rows
 - stdio transport; investigation sessions are cached in memory and mirrored to
@@ -39,7 +48,8 @@ needed).
 
 Requires Node.js >= 20 and a Datadog API key + application key
 (the application key needs the `logs_read_data` scope; add `apm_read` for
-`datadog_get_trace` and `events_read` for `datadog_search_events`).
+`datadog_get_trace`, `events_read` for `datadog_search_events`, and
+`timeseries_query` for `datadog_query_metrics`).
 
 ### Claude Code
 
@@ -108,7 +118,8 @@ Required Datadog permissions are documented in
 | `datadog_aggregate_logs` | model | Count by facet (`groupBy`), or as a timeseries when `interval` is set (per-facet counts per bucket) |
 | `datadog_get_trace` | model | Render one APM trace as a parent/child span tree. Runs of identical leaf siblings collapse into one `xN` line (`collapse: false` to disable); `errors_only` renders just error spans + their ancestors; `max_spans` caps the output |
 | `datadog_search_events` | model | Search Datadog events (deployments, monitor alerts, config changes) as a compact timeline; `max_tags: 0` hides tags |
-| `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
+| `datadog_query_metrics` | model | Query metric timeseries with the classic syntax (`avg:system.cpu.user{service:web} by {host}`); per-series stats + downsampled values, `max_series` caps group-by fan-out |
+| `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings`. Also fetches events in the window (`includeEvents` / `eventsQuery`) and metrics (`metricsQueries`), and lists trace candidates extracted from the fetched rows |
 | `datadog_get_session_logs` | model | Read rows already stored under a `viewUUID` — no Datadog API call. List mode filters by `status` / `service` / `pattern` (the summary's `#N`) / `contains` with `offset`/`limit`; detail mode (`row` or `logId`) returns one full raw log, with `fields` to select attribute paths |
 | `datadog_export_report` | model | Write a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` as a self-contained HTML report, or as CSV/JSON of the fetched rows (`format`) — no UI needed |
 | `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |

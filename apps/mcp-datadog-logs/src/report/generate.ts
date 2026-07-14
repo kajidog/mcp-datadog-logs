@@ -1,9 +1,17 @@
-import type { FacetBreakdown, InvestigationResult, LogPattern, LogRow } from '@kajidog/investigation-shared'
+import type {
+  EventMarker,
+  FacetBreakdown,
+  InvestigationResult,
+  LogPattern,
+  LogRow,
+  MetricSeries,
+} from '@kajidog/investigation-shared'
 import type { RawLog } from '../datadog/normalize.js'
 import { renderMarkdown } from './markdown.js'
 import { REPORT_JS } from './script.js'
 import { REPORT_CSS } from './styles.js'
-import { renderTimelineSvg, stackStatuses, statusColor } from './svg-timeline.js'
+import { renderSparklineSvg } from './svg-sparkline.js'
+import { eventColor, renderTimelineSvg, stackStatuses, statusColor } from './svg-timeline.js'
 
 const MAX_RAW_JSON_CHARS = 4_000
 const KNOWN_STATUS_CLASSES = new Set(['error', 'warn', 'info', 'debug'])
@@ -55,8 +63,11 @@ export function generateReport(
     </div>
   </header>
   ${renderStatTiles(result)}
+  ${renderNotices(result.notices)}
   ${renderFindingsSection(result.findings)}
   ${renderTimelineSection(result, timeZone)}
+  ${renderEventsSection(result.events, formatTs)}
+  ${renderMetricsSection(result.metrics)}
   ${renderFacetsSection(result.facets)}
   ${renderPatternsSection(result.patterns, result.rows.length)}
   ${renderLogsSection(result, rawById, formatTs, timeZone)}
@@ -94,14 +105,23 @@ function renderFindingsSection(findings: string | undefined): string {
 
 function renderTimelineSection(result: InvestigationResult, timeZone: string): string {
   const rangeMs = result.resolvedRange.toMs - result.resolvedRange.fromMs
-  const svg = renderTimelineSvg(result.timeline, { rangeMs, endMs: result.resolvedRange.toMs, timeZone })
-  const legend = stackStatuses(result.timeline)
+  const events = result.events ?? []
+  const svg = renderTimelineSvg(result.timeline, { rangeMs, endMs: result.resolvedRange.toMs, timeZone, events })
+  const statusLegend = stackStatuses(result.timeline)
     .reverse()
     .map(
       (status) =>
         `<button type="button" class="item" data-status="${escapeHtml(status)}" aria-pressed="false"><span class="swatch" style="background:${statusColor(status)}"></span>${escapeHtml(status)}</button>`
     )
     .join('')
+  const eventKinds = [...new Set(events.map((e) => e.kind))]
+  const eventLegend = eventKinds
+    .map(
+      (kind) =>
+        `<span class="item"><span class="swatch" style="background:${eventColor(kind)}"></span>${escapeHtml(kind)} event</span>`
+    )
+    .join('')
+  const legend = statusLegend + eventLegend
   return `<section>
     <h2>Log volume (per ${escapeHtml(result.interval)})</h2>
     <div class="card timeline">
@@ -110,6 +130,67 @@ function renderTimelineSection(result: InvestigationResult, timeZone: string): s
       <p class="chart-hint">Click a bar to filter the log list to that time bucket; click a legend status to filter by status. Click again to clear.</p>
     </div>
   </section>`
+}
+
+function renderNotices(notices: string[] | undefined): string {
+  if (!notices || notices.length === 0) {
+    return ''
+  }
+  return `<ul class="notices">${notices.map((notice) => `<li>${escapeHtml(notice)}</li>`).join('')}</ul>`
+}
+
+function renderEventsSection(events: EventMarker[] | undefined, formatTs: (ms: number) => string): string {
+  if (!events || events.length === 0) {
+    return ''
+  }
+  const rows = events
+    .map((event) => {
+      const tsMs = Date.parse(event.time)
+      const time = Number.isNaN(tsMs) ? event.time : formatTs(tsMs)
+      const tags = (event.tags ?? []).join(', ')
+      return `<tr>
+        <td class="time">${escapeHtml(time)}</td>
+        <td><span class="event-badge ${escapeHtml(event.kind)}">${escapeHtml(event.kind)}</span></td>
+        <td>${escapeHtml(event.source ?? '-')}</td>
+        <td>${escapeHtml(event.title)}</td>
+        <td class="tags">${escapeHtml(tags)}</td>
+      </tr>`
+    })
+    .join('')
+  return `<section>
+    <h2>Events in window (${events.length})</h2>
+    <div class="card events">
+      <table><thead><tr><th>Time</th><th>Kind</th><th>Source</th><th>Title</th><th>Tags</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+  </section>`
+}
+
+function renderMetricsSection(metrics: MetricSeries[] | undefined): string {
+  if (!metrics || metrics.length === 0) {
+    return ''
+  }
+  const cards = metrics
+    .map((series) => {
+      const stats = series.stats
+      const unit = series.unit ? ` ${escapeHtml(series.unit)}` : ''
+      return `<div class="card metric-card">
+        <div class="name">${escapeHtml(series.metric)}</div>
+        ${series.scope ? `<div class="scope">${escapeHtml(series.scope)}</div>` : ''}
+        <div class="stats">min ${formatMetricValue(stats.min)} · avg ${formatMetricValue(stats.avg)} · max ${formatMetricValue(stats.max)} · last ${stats.last === null ? '-' : formatMetricValue(stats.last)}${unit}</div>
+        ${renderSparklineSvg(series.points)}
+      </div>`
+    })
+    .join('')
+  return `<section><h2>Metrics</h2><div class="metrics-grid">${cards}</div></section>`
+}
+
+function formatMetricValue(value: number): string {
+  const abs = Math.abs(value)
+  if (abs !== 0 && (abs >= 100000 || abs < 0.01)) {
+    return value.toExponential(2)
+  }
+  return String(Math.round(value * 100) / 100)
 }
 
 function renderFacetsSection(facets: FacetBreakdown[]): string {
@@ -184,7 +265,7 @@ function renderLogEntry(row: LogRow, raw: RawLog | undefined, formatTs: (ms: num
       <span class="time">${escapeHtml(Number.isNaN(tsMs) ? row.timestamp : formatTs(tsMs))}</span>
       <span class="status-badge ${statusClass}">${escapeHtml(row.status)}</span>
       <span class="service">${escapeHtml(row.service ?? '-')}</span>
-      <span class="message">${escapeHtml(row.message || '(no message)')}</span>
+      <span class="message">${row.traceId ? `<span class="trace-chip" title="trace_id">trace:${escapeHtml(row.traceId)}</span> ` : ''}${escapeHtml(row.message || '(no message)')}</span>
     </summary>
     <pre>${escapeHtml(detail)}</pre>
   </details>`

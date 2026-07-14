@@ -60,6 +60,24 @@ export function registerRunInvestigationTool(server: McpServer): void {
             'Plain-text findings/notes to attach to the session; shown in the UI and HTML report. Replaces previous findings.'
           ),
         title: z.string().optional().describe('Human-readable title for this investigation / report'),
+        includeEvents: z
+          .boolean()
+          .optional()
+          .describe(
+            'Also fetch Datadog events (deploys, alerts) in the window and overlay them on the timeline (default true)'
+          ),
+        eventsQuery: z
+          .string()
+          .optional()
+          .describe('Events search query, e.g. "source:github tags:service:web" (default: all events in the window)'),
+        metricsQueries: z
+          .array(z.string())
+          .max(4)
+          .optional()
+          .describe(
+            'Metric queries to fetch alongside logs (classic syntax), e.g. ' +
+              '["avg:system.cpu.user{service:web}", "avg:trace.express.request.duration{service:web}"]'
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -77,6 +95,9 @@ export function registerRunInvestigationTool(server: McpServer): void {
       sampleRows,
       findings,
       title,
+      includeEvents,
+      eventsQuery,
+      metricsQueries,
     }: {
       query?: string
       from?: string
@@ -88,6 +109,9 @@ export function registerRunInvestigationTool(server: McpServer): void {
       sampleRows: number
       findings?: string
       title?: string
+      includeEvents?: boolean
+      eventsQuery?: string
+      metricsQueries?: string[]
     }): Promise<CallToolResult> => {
       try {
         if (cursor && !viewUUID) {
@@ -95,7 +119,7 @@ export function registerRunInvestigationTool(server: McpServer): void {
         }
         const stored = await runAndStoreInvestigation({
           viewUUID,
-          params: { query, from, to, groupBy, limit, cursor, title },
+          params: { query, from, to, groupBy, limit, cursor, title, includeEvents, eventsQuery, metricsQueries },
           findings,
         })
         const summary = formatInvestigationSummary(sessionResult(stored.session), stored.viewUUID, { sampleRows })
