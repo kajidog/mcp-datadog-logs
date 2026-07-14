@@ -66,10 +66,22 @@ describe('datadog_search_logs attributes parameter', () => {
     )
   })
 
-  it('JSON-stringifies object values and truncates them', async () => {
-    const line = await runSearch([log({ payload: { message: 'x'.repeat(200) } })], { attributes: ['payload'] })
+  it('JSON-stringifies object values and middle-truncates long ones, keeping the tail', async () => {
+    const line = await runSearch([log({ payload: { message: `${'x'.repeat(400)}SomeException` } })], {
+      attributes: ['payload'],
+    })
     expect(line).toContain('| payload={"message":"xxx')
     expect(line).toContain('…')
+    expect(line).toContain('SomeException"}')
+  })
+
+  it('accepts a comma-separated string for attributes', async () => {
+    const line = await runSearch([log({ 'http.status_code': 402, error: { kind: 'CardError' } })], {
+      attributes: 'http.status_code, error.kind',
+    })
+    expect(line).toBe(
+      '2026-07-11T09:20:14.000Z [ERROR] web-store — Payment failed | http.status_code=402 error.kind=CardError'
+    )
   })
 
   it('silently skips missing attributes and omits the separator when none resolve', async () => {

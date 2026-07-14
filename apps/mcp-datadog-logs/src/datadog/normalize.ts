@@ -180,10 +180,19 @@ export function lookupAttribute(bag: Record<string, unknown> | undefined, path: 
   return current
 }
 
-/** Compact stringification for key=value output appended to log lines. */
-export function formatAttributeValue(value: unknown, maxLength = 100): string {
+/**
+ * Compact stringification for key=value output appended to log lines.
+ * Over-long values are middle-truncated (head + … + tail) because the
+ * decisive part of error strings often sits at the end (e.g. AWS SDK
+ * "…, StatusCode: 400, FooException").
+ */
+export function formatAttributeValue(value: unknown, maxLength = 300): string {
   const text = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)
-  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text
+  if (text.length <= maxLength) {
+    return text
+  }
+  const head = Math.ceil(maxLength * 0.6)
+  return `${text.slice(0, head)}…${text.slice(text.length - (maxLength - head))}`
 }
 
 /**

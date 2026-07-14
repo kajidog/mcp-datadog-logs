@@ -140,12 +140,17 @@ describe('formatAttributeValue', () => {
     expect(formatAttributeValue(false)).toBe('false')
   })
 
-  it('stringifies and truncates objects', () => {
+  it('stringifies objects and keeps values within the default cap intact', () => {
     const value = { message: 'x'.repeat(200) }
-    const text = formatAttributeValue(value)
-    expect(text.startsWith('{"message":"xxx')).toBe(true)
-    expect(text).toHaveLength(101)
-    expect(text.endsWith('…')).toBe(true)
+    expect(formatAttributeValue(value)).toBe(JSON.stringify(value))
+  })
+
+  it('middle-truncates long values so the tail survives', () => {
+    const text = formatAttributeValue(`${'x'.repeat(400)}, StatusCode: 400, SomeException`)
+    expect(text).toHaveLength(301)
+    expect(text.startsWith('xxx')).toBe(true)
+    expect(text).toContain('…')
+    expect(text.endsWith(', StatusCode: 400, SomeException')).toBe(true)
   })
 })
 
