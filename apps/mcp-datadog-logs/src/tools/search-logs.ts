@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import * as z from 'zod'
+import { extractLogPatterns } from '../analysis/patterns.js'
 import { getDatadogClient } from '../datadog/client.js'
 import { extractTraceId, formatAttributeValue, lookupAttribute, normalizeLogRow } from '../datadog/normalize.js'
 import { resolveRange } from '../datadog/time.js'
@@ -15,7 +16,11 @@ export function registerSearchLogsTool(server: McpServer): void {
       title: 'Search Datadog Logs',
       description:
         'Search Datadog logs and return matching entries as compact text. ' +
-        'Use for quick model-side inspection. For a visual, user-facing investigation use datadog_investigate_logs instead.',
+        'Best for pinpoint lookups: a known query, a few rows, one attribute to check. ' +
+        'For broad investigation (unknown error shape, need volume/timeline/breakdowns) use datadog_run_investigation ' +
+        'instead — one call fetches rows+timeline+facets+patterns into a server-side session that ' +
+        'datadog_get_session_logs can drill into without further Datadog calls. ' +
+        'For a visual, user-facing investigation use datadog_investigate_logs.',
       inputSchema: {
         query: z.string().default('*').describe('Datadog logs search query, e.g. "service:payments status:error"'),
         from: z
@@ -37,6 +42,13 @@ export function registerSearchLogsTool(server: McpServer): void {
             "Log attribute keys to append to each line as key=value, looked up by dot path in the log's custom " +
               'attributes (e.g. "http.status_code", "error.kind"). Missing keys are skipped.'
           ),
+        dedupe: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Cluster the fetched page into message patterns and return one line per pattern (count + template + ' +
+              'example) instead of one line per log. Applies to the fetched page only (up to limit rows).'
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -51,6 +63,7 @@ export function registerSearchLogsTool(server: McpServer): void {
       sort,
       cursor,
       attributes,
+      dedupe,
     }: {
       query: string
       from: string
@@ -59,6 +72,7 @@ export function registerSearchLogsTool(server: McpServer): void {
       sort: 'timestamp' | '-timestamp'
       cursor?: string
       attributes?: string[]
+      dedupe: boolean
     }): Promise<CallToolResult> => {
       try {
         resolveRange(from, to)
@@ -67,14 +81,34 @@ export function registerSearchLogsTool(server: McpServer): void {
         if (logs.length === 0) {
           return textResult(`No logs matched query "${query}" between ${from} and ${to}.`)
         }
-        const lines = logs.map((log) => {
-          const row = normalizeLogRow(log, {
+        const rows = logs.map((log) =>
+          normalizeLogRow(log, {
             maxRows: limit,
             maxMessageLength: 200,
             maxTags: 0,
             maxTimelineBuckets: 0,
             maxFacetValues: 0,
           })
+        )
+        const footer = nextCursor ? `\nnextCursor: ${nextCursor}` : ''
+        if (dedupe) {
+          // Uncapped on purpose: the default 20-pattern cap would silently drop
+          // the rarest templates and make the header underreport the total.
+          // Each pattern needs at least one row, so the page size bounds this.
+          const patterns = extractLogPatterns(rows, { maxPatterns: rows.length })
+          const header = `${logs.length} logs in ${patterns.length} patterns (query: ${query}, range: ${from} → ${to})`
+          const lines = patterns.map((pattern) => {
+            const rowIndex = rows.findIndex((row) => row.id === pattern.rowIds[0])
+            const example = rows[rowIndex]
+            const exampleText = example
+              ? `${example.timestamp} ${example.service ?? '-'}: ${example.message.replace(/\s+/g, ' ').trim()}`
+              : pattern.example
+            return `${pattern.count}x ${pattern.template.replace(/\s+/g, ' ').trim()} — e.g. ${exampleText}`
+          })
+          return textResult(`${header}\n${lines.join('\n')}${footer}`)
+        }
+        const lines = logs.map((log, i) => {
+          const row = rows[i]
           const bag = log.attributes?.attributes
           const traceId = extractTraceId(bag)
           const extras = (attributes ?? [])
@@ -96,7 +130,6 @@ export function registerSearchLogsTool(server: McpServer): void {
           return parts.filter(Boolean).join(' ')
         })
         const header = `${logs.length} logs (query: ${query}, range: ${from} → ${to})`
-        const footer = nextCursor ? `\nnextCursor: ${nextCursor}` : ''
         return textResult(`${header}\n${lines.join('\n')}${footer}`)
       } catch (error) {
         return createErrorResponse(error)

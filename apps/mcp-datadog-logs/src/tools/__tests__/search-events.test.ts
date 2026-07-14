@@ -69,6 +69,26 @@ describe('datadog_search_events', () => {
     expect(line).not.toContain('tag:8')
   })
 
+  it('hides tags entirely with max_tags: 0', async () => {
+    searchEvents.mockResolvedValue([
+      {
+        attributes: {
+          timestamp: '2026-07-11T09:12:00Z',
+          tags: ['service:web', 'env:prod'],
+          attributes: { title: 'Deploy', status: 'info', sourceTypeName: 'github' },
+        },
+      },
+    ])
+    const server = createServer()
+    const tool = (server as any)._registeredTools.datadog_search_events
+
+    const result = await tool.handler({ query: '*', from: 'now-1d', to: 'now', limit: 25, max_tags: 0 })
+
+    const line = result.content[0].text.split('\n')[1]
+    expect(line).toBe('2026-07-11T09:12:00.000Z [info] github — Deploy')
+    expect(line).not.toContain('tags:')
+  })
+
   it('falls back to the event message and collapses whitespace when there is no title', async () => {
     searchEvents.mockResolvedValue([
       { attributes: { timestamp: '2026-07-11T09:12:00Z', message: 'multi\n  line\tmessage' } },

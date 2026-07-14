@@ -15,6 +15,10 @@ needed).
   - the model receives only a compact summary — iterate without bloating context
   - pass the `viewUUID` to `datadog_investigate_logs` to display it, with optional
     Markdown `findings` rendered in the UI and the HTML report
+- 🔬 `datadog_get_session_logs` — drill into a stored session with **zero extra
+  Datadog API calls**: filter the stored rows by status / service / message
+  pattern `#N` / substring, or fetch one full raw log by `row=[N]` index or
+  `logId` (with `fields` to select attribute paths on large logs)
 - 📄 `datadog_export_report` — export directly from the model:
   - pass a `viewUUID` to write the self-contained HTML report to disk without opening the UI
   - `format: 'csv' | 'json'` writes the fetched log rows as data instead
@@ -100,9 +104,12 @@ Required Datadog permissions are documented in
 
 | Tool | Audience | Description |
 |---|---|---|
-| `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor |
+| `datadog_search_logs` | model | Search logs, compact text lines + pagination cursor. `dedupe: true` clusters the fetched page into message patterns (one line per pattern) |
 | `datadog_aggregate_logs` | model | Count by facet (`groupBy`), or as a timeseries when `interval` is set (per-facet counts per bucket) |
+| `datadog_get_trace` | model | Render one APM trace as a parent/child span tree. Runs of identical leaf siblings collapse into one `xN` line (`collapse: false` to disable); `errors_only` renders just error spans + their ancestors; `max_spans` caps the output |
+| `datadog_search_events` | model | Search Datadog events (deployments, monitor alerts, config changes) as a compact timeline; `max_tags: 0` hides tags |
 | `datadog_run_investigation` | model | Headless investigation stored in a server-side session; returns a compact summary + `viewUUID`. Iterate on the same `viewUUID`, load more rows with `cursor`, attach `findings` |
+| `datadog_get_session_logs` | model | Read rows already stored under a `viewUUID` — no Datadog API call. List mode filters by `status` / `service` / `pattern` (the summary's `#N`) / `contains` with `offset`/`limit`; detail mode (`row` or `logId`) returns one full raw log, with `fields` to select attribute paths |
 | `datadog_export_report` | model | Write a `viewUUID` session to `MCP_DATADOG_EXPORT_DIR` as a self-contained HTML report, or as CSV/JSON of the fetched rows (`format`) — no UI needed |
 | `datadog_investigate_logs` | model → UI | Run a full investigation and open the interactive UI. Pass a `viewUUID` from `datadog_run_investigation` to display that session without re-fetching |
 | `_get_view_state` / `_run_investigation` / `_get_log_detail` / `_export_report` | UI only | Internal bridge tools called by the app (hidden from the model) |
@@ -110,6 +117,12 @@ Required Datadog permissions are documented in
 `from`/`to` accept Datadog time math (`now-4h`, `now`) or ISO 8601. Absolute
 timestamps must include an explicit time zone (`Z` or an offset like `+09:00`);
 values without one (e.g. `2026-07-12T10:00:00`) are rejected as ambiguous.
+
+`datadog_run_investigation` summaries number message patterns (`#1`…) and
+prefix sample rows with their stored index (`[N]`); both are stable handles for
+`datadog_get_session_logs` (`pattern: 1`, `row: N`). Indexes stay valid across
+`cursor` load-more but reset when the same `viewUUID` is re-run with a new
+query.
 
 ## Exported reports
 

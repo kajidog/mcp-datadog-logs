@@ -9,7 +9,7 @@ export interface SummaryOptions {
   topPatterns?: number
 }
 
-const MAX_SAMPLE_MESSAGE_LENGTH = 200
+export const MAX_SAMPLE_MESSAGE_LENGTH = 200
 const MAX_PATTERN_TEMPLATE_LENGTH = 120
 
 /**
@@ -50,20 +50,22 @@ export function formatInvestigationSummary(
     const shown = patterns.slice(0, topPatterns)
     const rest = patterns.length - shown.length
     lines.push(`Top patterns (of ${result.rows.length} fetched rows)${rest > 0 ? ` +${rest} more` : ''}:`)
-    for (const pattern of shown) {
+    shown.forEach((pattern, i) => {
       let template = pattern.template.replace(/\s+/g, ' ').trim()
       if (template.length > MAX_PATTERN_TEMPLATE_LENGTH) {
         template = `${template.slice(0, MAX_PATTERN_TEMPLATE_LENGTH)}…`
       }
-      lines.push(`  ${pattern.count.toLocaleString('en-US')} (${Math.round(pattern.ratio * 100)}%) ${template}`)
-    }
+      lines.push(
+        `  #${i + 1} ${pattern.count.toLocaleString('en-US')} (${Math.round(pattern.ratio * 100)}%) ${template}`
+      )
+    })
   }
 
   if (sampleRows > 0 && result.rows.length > 0) {
-    const samples = result.rows.slice(0, sampleRows)
-    lines.push(`Sample logs (${samples.length} of ${result.rows.length} stored):`)
-    for (const row of samples) {
-      lines.push(formatSampleLine(row))
+    const samples = pickSampleRows(result.rows, sampleRows)
+    lines.push(`Sample logs (${samples.length} of ${result.rows.length} stored, errors first):`)
+    for (const { row, index } of samples) {
+      lines.push(formatSampleLine(row, index))
     }
   } else if (result.rows.length > 0) {
     lines.push(`${result.rows.length} log rows stored in the session.`)
@@ -75,12 +77,30 @@ export function formatInvestigationSummary(
   return lines.join('\n')
 }
 
-function formatSampleLine(row: LogRow): string {
+/**
+ * Picks sample rows for the summary: error rows first, then warn, then the
+ * rest, each group in stored order. Keeps the absolute index into
+ * `result.rows` so samples can be referenced as `row=<N>` in
+ * datadog_get_session_logs.
+ */
+function pickSampleRows(rows: LogRow[], count: number): Array<{ row: LogRow; index: number }> {
+  const indexed = rows.map((row, index) => ({ row, index }))
+  const rank = (status: string): number => (status === 'error' ? 0 : status === 'warn' ? 1 : 2)
+  return indexed.sort((a, b) => rank(a.row.status) - rank(b.row.status) || a.index - b.index).slice(0, count)
+}
+
+/**
+ * One compact text line for a stored log row. `index` is the row's absolute
+ * position in the session's rows array — the `[N]` reference accepted as
+ * `row` by datadog_get_session_logs.
+ */
+export function formatSampleLine(row: LogRow, index?: number): string {
   let message = row.message.replace(/\s+/g, ' ').trim() || '(no message)'
   if (message.length > MAX_SAMPLE_MESSAGE_LENGTH) {
     message = `${message.slice(0, MAX_SAMPLE_MESSAGE_LENGTH)}…`
   }
   const parts = [
+    index === undefined ? undefined : `[${index}]`,
     row.timestamp,
     `[${row.status.toUpperCase()}]`,
     row.service ?? '-',
